@@ -91,13 +91,6 @@ function toast(msg) {
   toastTimer = setTimeout(() => el.remove(), 2600);
 }
 
-function knownNames() {
-  const count = {};
-  for (const w of state.workouts) for (const ex of w.exercises) count[ex.name] = (count[ex.name] || 0) + 1;
-  for (const t of Object.values(state.templates)) for (const n of t.exercises) count[n] = count[n] || 0;
-  return Object.entries(count).sort((a, b) => b[1] - a[1]).map(([n]) => n);
-}
-
 function trendBadge(t, e) {
   if (!e) return '<span class="badge new">нет истории</span>';
   if (!t) return '';
@@ -235,7 +228,6 @@ function renderSession() {
   const ph = E.PHASES[d.phaseKey];
   const mins = Math.round((Date.now() - d.startedAt) / 60000);
   const doneSets = d.items.reduce((n, it) => n + it.sets.filter(s => s.done).length, 0);
-  const options = knownNames().map(n => `<option value="${esc(n)}">`).join('');
 
   view.innerHTML = `
     <div class="card tight">
@@ -248,13 +240,7 @@ function renderSession() {
       </div>
     </div>
     ${d.items.map((it, i) => renderItem(it, i)).join('')}
-    <div class="card tight">
-      <div class="row">
-        <input class="grow" list="exNames" id="addExName" placeholder="Добавить упражнение">
-        <button data-act="add-ex">Добавить</button>
-      </div>
-      <datalist id="exNames">${options}</datalist>
-    </div>
+    <button class="block add-ex-btn" data-act="open-add">＋ Добавить упражнение</button>
     <div class="row" style="gap:10px">
       <button class="danger grow" data-act="cancel">Отменить</button>
       <button class="primary grow" data-act="finish">Завершить и сохранить</button>
@@ -583,7 +569,6 @@ function zoneConclusion(zEntries, bestZone) {
 function renderSettings() {
   const s = state.settings;
   const ph = E.phaseFor(today(), s);
-  const options = knownNames().map(n => `<option value="${esc(n)}">`).join('');
   const days = Object.entries(state.templates).sort(([a], [b]) => ((+a + 6) % 7) - ((+b + 6) % 7));
   const freeDays = [1, 2, 3, 4, 5, 6, 0].filter(d => !state.templates[d]);
   view.innerHTML = `
@@ -610,7 +595,6 @@ function renderSettings() {
 
     <div class="card">
       <h3>Дни и упражнения</h3>
-      <datalist id="exNames">${options}</datalist>
       ${days.map(([d, t]) => `
         <div style="margin:12px 0 4px" class="row between">
           <b>${E.WEEKDAYS[d]}</b>
@@ -618,14 +602,11 @@ function renderSettings() {
           <button class="small ghost danger" data-act="del-day" data-day="${d}" aria-label="Удалить день">✕</button>
         </div>
         ${t.exercises.map((n, i) => `
-          <div class="tpl-item"><span>${esc(n)}</span>
+          <div class="tpl-item">${animThumb(n, 'mini')}<span>${esc(mediaFor(n)?.title || n)}<small class="muted" style="display:block">${esc(n)}</small></span>
             <button class="small ghost" data-act="tpl-up" data-day="${d}" data-i="${i}" aria-label="Выше">↑</button>
             <button class="small ghost" data-act="tpl-del" data-day="${d}" data-i="${i}" aria-label="Убрать">✕</button>
           </div>`).join('')}
-        <div class="row" style="margin-top:6px">
-          <input class="grow" list="exNames" placeholder="Добавить упражнение" data-tpl-add="${d}">
-          <button class="small" data-act="tpl-add" data-day="${d}">+</button>
-        </div>`).join('')}
+        <button class="small" style="margin-top:6px" data-act="tpl-add" data-day="${d}">＋ Добавить упражнение</button>`).join('')}
       ${freeDays.length ? `
         <div class="row" style="margin-top:14px">
           <select id="newDay">${freeDays.map(d => `<option value="${d}">${E.WEEKDAYS[d]}</option>`).join('')}</select>
@@ -734,14 +715,16 @@ view.addEventListener('click', e => {
     case 'remove-ex':
       if (state.draft.items[i].sets.some(s => s.done) && !confirm('В упражнении есть выполненные подходы. Убрать?')) return;
       state.draft.items.splice(i, 1); save(KEYS.draft, state.draft); renderSession(); break;
-    case 'add-ex': {
-      const raw = document.getElementById('addExName').value.trim();
-      if (!raw) return;
-      const name = normalizeName(raw);
-      const p = { ...E.prescribe(name, state.draft.phaseKey, state.workouts, state.settings, today()), trend: E.trend(name, state.workouts, today()) };
-      state.draft.items.push(makeItem(p));
-      save(KEYS.draft, state.draft); renderSession(); break;
-    }
+    case 'open-add':
+      openExercisePicker('Добавить в тренировку', name => {
+        const p = { ...E.prescribe(name, state.draft.phaseKey, state.workouts, state.settings, today()), trend: E.trend(name, state.workouts, today()) };
+        state.draft.items.push(makeItem(p));
+        save(KEYS.draft, state.draft);
+        renderSession();
+        toast('Добавлено: ' + (mediaFor(name)?.title || name));
+        requestAnimationFrame(() => view.querySelectorAll('.card.tight')[state.draft.items.length]?.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+      });
+      break;
     case 'cancel':
       if (confirm('Отменить тренировку? Отмеченные подходы не сохранятся.')) {
         state.draft = null; save(KEYS.draft, null); stopTimer(); releaseWakeLock(); render();
@@ -771,12 +754,12 @@ view.addEventListener('click', e => {
       const ex = state.templates[day].exercises;
       [ex[i - 1], ex[i]] = [ex[i], ex[i - 1]]; saveTemplates(); renderSettings(); break;
     }
-    case 'tpl-add': {
-      const inp = view.querySelector(`[data-tpl-add="${day}"]`);
-      const v = inp.value.trim();
-      if (!v) return;
-      state.templates[day].exercises.push(normalizeName(v)); saveTemplates(); renderSettings(); break;
-    }
+    case 'tpl-add':
+      openExercisePicker(`Добавить в ${E.WEEKDAYS[day]} · ${state.templates[day].title}`, name => {
+        state.templates[day].exercises.push(name); saveTemplates(); renderSettings();
+        toast('Добавлено в программу');
+      });
+      break;
     case 'del-day':
       if (confirm(`Удалить день ${E.WEEKDAYS[day]} из программы?`)) { delete state.templates[day]; saveTemplates(); renderSettings(); }
       break;
@@ -874,6 +857,99 @@ async function openMedia(name) {
     : '<li class="muted" style="list-style:none">Описание недоступно без интернета.</li>';
 }
 
+// ---------- выбор упражнения с картинками ----------
+
+const MUSCLE_FILTERS = ['chest', 'back', 'shoulders', 'biceps', 'triceps', 'forearms', 'legs', 'abs'];
+const DB_MUSCLE = {
+  chest: 'chest', lats: 'back', 'middle back': 'back', 'lower back': 'back', traps: 'back',
+  shoulders: 'shoulders', biceps: 'biceps', triceps: 'triceps', forearms: 'forearms',
+  quadriceps: 'legs', hamstrings: 'legs', glutes: 'legs', calves: 'legs', adductors: 'legs', abductors: 'legs',
+  abdominals: 'abs',
+};
+const addPicker = { cb: null, muscle: '', q: '' };
+
+function exerciseCandidates() {
+  const count = {};
+  for (const w of state.workouts) for (const ex of w.exercises) count[ex.name] = (count[ex.name] || 0) + 1;
+  for (const t of Object.values(state.templates)) for (const n of t.exercises) count[n] = count[n] || 0;
+  return Object.entries(count)
+    .map(([name, c]) => ({ name, count: c, media: mediaFor(name), muscle: E.muscleOf(name) }))
+    // в списке — упражнения с картинкой или те, что делал хотя бы 3 раза
+    .filter(x => x.media || x.count >= 3)
+    .sort((a, b) => (!!b.media - !!a.media) || b.count - a.count);
+}
+
+function openExercisePicker(title, cb) {
+  addPicker.cb = cb;
+  addPicker.muscle = '';
+  addPicker.q = '';
+  showModal(`
+    <div class="row between"><h3 style="margin:0">${esc(title)}</h3><button class="ghost small" data-m="close" aria-label="Закрыть">✕</button></div>
+    <input id="pkSearch" type="search" placeholder="Поиск: жим, тяга, махи, bench…" style="width:100%;margin:10px 0 8px" autocomplete="off">
+    <div class="chips" id="pkChips">
+      <button class="chip on" data-m="flt" data-mu="">Все</button>
+      ${MUSCLE_FILTERS.map(m => `<button class="chip" data-m="flt" data-mu="${m}">${E.MUSCLE_LABELS[m]}</button>`).join('')}
+    </div>
+    <div id="pkList"></div>`);
+  document.getElementById('pkSearch').addEventListener('input', e => { addPicker.q = e.target.value; renderPickerList(); });
+  renderPickerList();
+}
+
+function pickRow(attrs, thumb, titleText, sub) {
+  return `<button class="result pick" ${attrs}>${thumb}<span><b>${esc(titleText)}</b><small class="muted">${esc(sub)}</small></span></button>`;
+}
+
+let pickerSeq = 0;
+async function renderPickerList() {
+  const seq = ++pickerSeq;
+  const q = addPicker.q.trim().toLowerCase();
+  const words = q.split(/\s+/).filter(Boolean);
+  const mine = exerciseCandidates().filter(x =>
+    (!addPicker.muscle || x.muscle === addPicker.muscle) &&
+    (!words.length || words.every(w => (x.name + ' ' + (x.media?.title || '') + ' ' + (x.media?.en || '')).toLowerCase().includes(w))));
+
+  let html = '';
+  if (mine.length) {
+    html += '<div class="pk-head">Твои упражнения</div>' + mine.map(x => {
+      const title = x.media?.title || x.name;
+      const thumb = x.media
+        ? `<span class="anim mini"><img src="${esc(x.media.frames[0])}" alt="" loading="lazy"><img class="f2" src="${esc(x.media.frames[1])}" alt="" loading="lazy"></span>`
+        : '<span class="anim mini empty-anim">?</span>';
+      const sub = `${title !== x.name ? x.name + ' · ' : ''}${E.MUSCLE_LABELS[x.muscle]}${x.count ? ` · делал ${x.count} раз` : ''}`;
+      return pickRow(`data-m="add-pick" data-name="${esc(x.name)}"`, thumb, title, sub);
+    }).join('');
+  }
+
+  if (words.length) {
+    let more;
+    try { more = await searchDb(q); } catch { more = null; }
+    if (seq !== pickerSeq) return;
+    if (more) {
+      const have = new Set(mine.map(x => x.media?.id).filter(Boolean));
+      more = more.filter(r => !have.has(r.id) && (!addPicker.muscle || DB_MUSCLE[r.muscle] === addPicker.muscle)).slice(0, 25);
+      if (more.length) {
+        html += '<div class="pk-head">Ещё из базы (названия по-английски)</div>' + more.map(r => pickRow(
+          `data-m="add-db" data-id="${esc(r.id)}" data-dbname="${esc(r.name)}"`,
+          `<span class="anim mini"><img src="${esc(r.thumb)}" alt="" loading="lazy"></span>`,
+          r.name, `${E.MUSCLE_LABELS[DB_MUSCLE[r.muscle] || 'other']} · ${r.equip}`,
+        )).join('');
+      }
+    } else {
+      html += '<p class="muted small">Остальная база доступна только с интернетом.</p>';
+    }
+    html += `<button class="small ghost" data-m="add-custom" style="margin-top:8px">＋ Своё упражнение «${esc(addPicker.q.trim())}» (без картинки)</button>`;
+  }
+  if (seq !== pickerSeq) return;
+  const box = document.getElementById('pkList');
+  if (box) box.innerHTML = html || '<p class="muted small">Ничего не нашлось. Попробуй другое слово.</p>';
+}
+
+function finishPick(name) {
+  const cb = addPicker.cb;
+  closeModal();
+  cb?.(name);
+}
+
 let pickerFor = null;
 async function openPicker(name) {
   pickerFor = name;
@@ -909,6 +985,18 @@ modal.addEventListener('click', e => {
   if (!b) return;
   const a = b.dataset.m;
   if (a === 'close') closeModal();
+  if (a === 'flt') {
+    addPicker.muscle = b.dataset.mu;
+    modal.querySelectorAll('#pkChips .chip').forEach(c => c.classList.toggle('on', c === b));
+    renderPickerList();
+  }
+  if (a === 'add-pick') finishPick(b.dataset.name);
+  if (a === 'add-db') {
+    const name = b.dataset.dbname;
+    setPick(name, b.dataset.id); // запоминаем картинку для нового упражнения
+    finishPick(name);
+  }
+  if (a === 'add-custom' && addPicker.q.trim()) finishPick(normalizeName(addPicker.q.trim()));
   if (a === 'pick') openPicker(b.dataset.name);
   if (a === 'choose' || a === 'unpick') {
     setPick(pickerFor, a === 'choose' ? b.dataset.id : null);

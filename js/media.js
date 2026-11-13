@@ -39,7 +39,7 @@ export function mediaFor(name) {
   if (!id) return null;
   const b = bundled[id];
   if (b) {
-    return { id, local: true, title: ru[id]?.name || b.name, frames: [`img/ex/${b.file}-0.webp`, `img/ex/${b.file}-1.webp`] };
+    return { id, local: true, title: ru[id]?.name || b.name, en: b.name, frames: [`img/ex/${b.file}-0.webp`, `img/ex/${b.file}-1.webp`] };
   }
   return { id, local: false, title: id.replace(/_/g, ' '), frames: [`${REMOTE}${id}/0.jpg`, `${REMOTE}${id}/1.jpg`] };
 }

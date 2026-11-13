@@ -242,3 +242,14 @@ body.modal-open { overflow: hidden; }
 .result img { width: 72px; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 8px; background: #fff; flex: none; }
 .result span { display: flex; flex-direction: column; }
 .note { margin: 2px 0 6px; padding-left: 10px; border-left: 2px solid var(--info); color: var(--text); opacity: .85; }
+
+/* выбор упражнения */
+.add-ex-btn { margin-bottom: 12px; border-style: dashed; color: var(--accent); }
+.anim.mini { width: 72px; border-radius: 8px; }
+.tpl-item .anim.mini { width: 54px; }
+.tpl-item span small { font-size: 11px; }
+.pk-head { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; margin: 12px 0 6px; }
+.result.pick { width: 100%; margin-bottom: 6px; }
+.result.pick span b { font-weight: 600; }
+.result.pick small { font-size: 12px; }
+#pkChips { position: sticky; top: -16px; background: var(--card); padding-top: 4px; z-index: 1; }
