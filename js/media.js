@@ -1,6 +1,8 @@
 // Картинки упражнений из free-exercise-db (общественное достояние).
 // Встроенные кадры лежат в img/ex, остальные подгружаются из репозитория базы по выбору в поиске.
 
+import { LANG } from './i18n.js';
+
 const REMOTE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
 const PICKS_KEY = 'gc.media';
 
@@ -39,12 +41,13 @@ export function mediaFor(name) {
   if (!id) return null;
   const b = bundled[id];
   if (b) {
-    return { id, local: true, title: ru[id]?.name || b.name, en: b.name, frames: [`img/ex/${b.file}-0.webp`, `img/ex/${b.file}-1.webp`] };
+    return { id, local: true, title: LANG === 'en' ? b.name : (ru[id]?.name || b.name), en: b.name, frames: [`img/ex/${b.file}-0.webp`, `img/ex/${b.file}-1.webp`] };
   }
   return { id, local: false, title: id.replace(/_/g, ' '), frames: [`${REMOTE}${id}/0.jpg`, `${REMOTE}${id}/1.jpg`] };
 }
 
 export async function stepsFor(id) {
+  if (LANG === 'en' && bundled[id]) return { steps: bundled[id].steps, lang: 'en' };
   if (ru[id]) return { steps: ru[id].steps, lang: 'ru' };
   if (bundled[id]) return { steps: bundled[id].steps, lang: 'en' };
   try {

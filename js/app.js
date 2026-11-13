@@ -1,6 +1,7 @@
 import { parseGymKeeperTxt, normalizeName } from './parser.js';
 import * as E from './engine.js';
 import { initMedia, mediaFor, stepsFor, setPick, searchDb } from './media.js';
+import { L, LANG, setLang, dayTitle, exName } from './i18n.js';
 
 // ---------- хранилище ----------
 
@@ -17,7 +18,7 @@ function save(key, value) {
     if (value === null) localStorage.removeItem(key);
     else localStorage.setItem(key, JSON.stringify(value));
   } catch (e) {
-    toast('Не удалось сохранить: ' + e.message);
+    toast(L('Не удалось сохранить: ', 'Could not save: ') + e.message);
   }
 }
 
@@ -64,16 +65,17 @@ const view = document.getElementById('view');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function animThumb(name, cls = '') {
   const m = mediaFor(name);
-  if (!m) return `<button class="anim empty-anim ${cls}" data-act="pick-media" data-name="${esc(name)}" aria-label="Выбрать картинку">＋<small>картинка</small></button>`;
-  return `<button class="anim ${cls}" data-act="media" data-name="${esc(name)}" aria-label="Техника: ${esc(name)}">
+  if (!m) return `<button class="anim empty-anim ${cls}" data-act="pick-media" data-name="${esc(name)}" aria-label="${L('Выбрать картинку', 'Choose a picture')}">＋<small>${L('картинка', 'picture')}</small></button>`;
+  return `<button class="anim ${cls}" data-act="media" data-name="${esc(name)}" aria-label="${L('Техника', 'Technique')}: ${esc(exName(name))}">
     <img src="${esc(m.frames[0])}" alt="" loading="lazy"><img class="f2" src="${esc(m.frames[1])}" alt="" loading="lazy"></button>`;
 }
 const fmtW = w => (w == null ? '—' : E.fmtW(w));
 const pct = x => (x > 0 ? '+' : '') + (x * 100).toFixed(1) + '%';
-const MONTHS_RU = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+const MONTHS = L(['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'],
+  ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']);
 function fmtDate(iso, withYear = true) {
   const d = E.parseISO(iso);
-  return `${E.WEEKDAYS[d.getDay()]}, ${d.getDate()} ${MONTHS_RU[d.getMonth()]}${withYear ? ' ' + d.getFullYear() : ''}`;
+  return `${E.WEEKDAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]}${withYear ? ' ' + d.getFullYear() : ''}`;
 }
 function fmtSec(s) {
   const a = Math.abs(Math.round(s));
@@ -92,10 +94,10 @@ function toast(msg) {
 }
 
 function trendBadge(t, e) {
-  if (!e) return '<span class="badge new">нет истории</span>';
+  if (!e) return `<span class="badge new">${L('нет истории', 'no history')}</span>`;
   if (!t) return '';
-  const label = { up: 'растёт', plateau: 'плато', down: 'падает' }[t.status];
-  return `<span class="badge ${t.status}" title="Лучший 1ПМ за 5 недель против 5 недель до этого">${label} ${pct(t.change)}</span>`;
+  const label = L({ up: 'растёт', plateau: 'плато', down: 'падает' }, { up: 'rising', plateau: 'plateau', down: 'falling' })[t.status];
+  return `<span class="badge ${t.status}" title="${L('Лучший 1ПМ за 5 недель против 5 недель до этого', 'Best 1RM over 5 weeks vs the 5 weeks before')}">${label} ${pct(t.change)}</span>`;
 }
 
 // ---------- фаза в шапке ----------
@@ -103,8 +105,8 @@ function trendBadge(t, e) {
 function renderPhasePill() {
   const p = E.phaseFor(today(), state.settings);
   document.getElementById('phasePill').innerHTML = p.blockNo < 1
-    ? `<span class="dot" style="background:${p.phase.color}"></span>До старта блока · ${p.phase.label}`
-    : `<span class="dot" style="background:${p.phase.color}"></span>Блок ${p.blockNo} · ${p.weekInBlock}/${p.blockLen} · ${p.phase.label}`;
+    ? `<span class="dot" style="background:${p.phase.color}"></span>${L('До старта блока', 'Before block start')} · ${p.phase.label}`
+    : `<span class="dot" style="background:${p.phase.color}"></span>${L('Блок', 'Block')} ${p.blockNo} · ${p.weekInBlock}/${p.blockLen} · ${p.phase.label}`;
 }
 
 // ---------- СЕГОДНЯ ----------
@@ -131,17 +133,24 @@ function planFor(dayKey) {
 }
 
 function targetText(p) {
-  if (p.warmup) return `Разминка: <b>${p.sets} × ${p.reps[0]}–${p.reps[1]}</b>, без отказа`;
-  if (p.skill) return `Техника: <b>${p.sets} × ${p.reps[0]}–${p.reps[1]}</b> · <b>${p.weight == null ? 'лёгкий вес' : fmtW(p.weight) + ' кг'}</b> · далеко от отказа · отдых ${fmtSec(p.rest)}`;
+  const kg = L('кг', 'kg');
+  if (p.warmup) return L(`Разминка: <b>${p.sets} × ${p.reps[0]}–${p.reps[1]}</b>, без отказа`, `Warm-up: <b>${p.sets} × ${p.reps[0]}–${p.reps[1]}</b>, not to failure`);
+  if (p.skill) {
+    const sw = p.weight == null ? L('лёгкий вес', 'light weight') : `${fmtW(p.weight)} ${kg}`;
+    return L(`Техника: <b>${p.sets} × ${p.reps[0]}–${p.reps[1]}</b> · <b>${sw}</b> · далеко от отказа · отдых ${fmtSec(p.rest)}`,
+      `Technique: <b>${p.sets} × ${p.reps[0]}–${p.reps[1]}</b> · <b>${sw}</b> · far from failure · rest ${fmtSec(p.rest)}`);
+  }
   const reps = `${p.reps[0]}–${p.reps[1]}`;
   let w;
-  if (p.weight == null) w = 'вес подбери сам';
+  if (p.weight == null) w = L('вес подбери сам', 'pick the weight yourself');
   else if (p.meta.equip === 'bodyweight') {
     const add = p.weight - state.settings.bodyweight;
-    w = add > 0 ? `+${fmtW(add)} кг` : 'свой вес';
-  } else w = `${fmtW(p.weight)} кг`;
-  const reptarget = p.bodyweightOnly && p.meta.kind === 'compound' ? `по ${p.targetReps}` : `${reps} (цель ${p.targetReps})`;
-  return `<b>${p.sets} × ${reptarget}</b> · <b>${w}</b> · ${p.rir} в запасе · отдых ${fmtSec(p.rest)}`;
+    w = add > 0 ? `+${fmtW(add)} ${kg}` : L('свой вес', 'bodyweight');
+  } else w = `${fmtW(p.weight)} ${kg}`;
+  const reptarget = p.bodyweightOnly && p.meta.kind === 'compound'
+    ? L(`по ${p.targetReps}`, `${p.targetReps} each`)
+    : L(`${reps} (цель ${p.targetReps})`, `${reps} (target ${p.targetReps})`);
+  return `<b>${p.sets} × ${reptarget}</b> · <b>${w}</b> · ${L(`${p.rir} в запасе`, `${p.rir} in reserve`)} · ${L('отдых', 'rest')} ${fmtSec(p.rest)}`;
 }
 
 function renderToday() {
@@ -151,29 +160,29 @@ function renderToday() {
   const nt = nextTrainingDay();
   const dayKey = state.pickDay ?? nt.day;
   const { ph, tpl, plans } = planFor(dayKey);
-  const tips = E.adviceForToday({ plans, phaseInfo: ph, workouts: state.workouts, today: today(), settings: state.settings });
+  const tips = E.adviceForToday({ plans: plans.map(p => ({ ...p, name: exName(p.name) })), phaseInfo: ph, workouts: state.workouts, today: today(), settings: state.settings });
 
   const chips = Object.entries(state.templates)
     .sort(([a], [b]) => ((+a + 6) % 7) - ((+b + 6) % 7))
-    .map(([k, t]) => `<button class="chip ${+k === +dayKey ? 'on' : ''}" data-day="${k}">${E.WEEKDAYS[k]} · ${esc(t.title)}</button>`)
+    .map(([k, t]) => `<button class="chip ${+k === +dayKey ? 'on' : ''}" data-day="${k}">${E.WEEKDAYS[k]} · ${esc(dayTitle(t.title))}</button>`)
     .join('');
 
   const when = state.pickDay == null
-    ? (nt.inDays === 0 ? 'Сегодня по плану' : nt.inDays === 1 ? 'Завтра по плану' : `Ближайшая тренировка через ${nt.inDays} дн.`)
-    : 'Выбрана тренировка';
+    ? (nt.inDays === 0 ? L('Сегодня по плану', 'Planned for today') : nt.inDays === 1 ? L('Завтра по плану', 'Planned for tomorrow') : L(`Ближайшая тренировка через ${nt.inDays} дн.`, `Next workout in ${nt.inDays} days`))
+    : L('Выбрана тренировка', 'Selected workout');
 
   view.innerHTML = `
     ${hasData ? '' : `
       <div class="card">
-        <h3>Загрузи свою историю</h3>
-        <p class="muted small">В GymKeeper: Настройки → Экспорт → TXT. Потом выбери этот файл здесь. По истории приложение посчитает рабочие веса.</p>
-        <button class="primary block" data-act="import-txt">Импортировать TXT из GymKeeper</button>
+        <h3>${L('Загрузи свою историю', 'Load your history')}</h3>
+        <p class="muted small">${L('В GymKeeper: Настройки → Экспорт → TXT. Потом выбери этот файл здесь. По истории приложение посчитает рабочие веса.', 'In GymKeeper: Settings → Export → TXT. Then pick that file here. The app will work out your working weights from your history.')}</p>
+        <button class="primary block" data-act="import-txt">${L('Импортировать TXT из GymKeeper', 'Import TXT from GymKeeper')}</button>
       </div>`}
     ${backupReminder()}
     <div class="chips">${chips}</div>
     <div class="card">
       <div class="small muted">${when}</div>
-      <h2 style="margin:2px 0 10px">${esc(tpl?.title || 'Тренировка')}</h2>
+      <h2 style="margin:2px 0 10px">${esc(dayTitle(tpl?.title || 'Тренировка'))}</h2>
       <ul class="tips">${tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul>
     </div>
     ${plans.map(p => `
@@ -181,25 +190,25 @@ function renderToday() {
         <div class="ex-head">
           ${animThumb(p.name)}
           <div class="grow">
-            <div class="ex-name">${esc(p.name)}</div>
+            <div class="ex-name">${esc(exName(p.name))}</div>
             ${p.warmup ? '' : trendBadge(p.trend, p.e1rm)}
           </div>
         </div>
         <div class="target">${targetText(p)}</div>
         ${p.meta.note ? `<div class="note small">${esc(p.meta.note)}</div>` : ''}
-        <div class="small muted">${p.last ? `Прошлый раз (${fmtDate(p.last.date, false)}): ${esc(E.formatSets(p.last.sets))}` : 'Ещё не делал'}
-        ${p.e1rm ? ` · 1ПМ ≈ ${Math.round(p.e1rm)} кг` : ''}</div>
+        <div class="small muted">${p.last ? `${L('Прошлый раз', 'Last time')} (${fmtDate(p.last.date, false)}): ${esc(E.formatSets(p.last.sets))}` : L('Ещё не делал', 'Not done yet')}
+        ${p.e1rm ? ` · ${L('1ПМ', '1RM')} ≈ ${Math.round(p.e1rm)} ${L('кг', 'kg')}` : ''}</div>
       </div>`).join('')}
-    <button class="primary block" data-act="start" data-day="${dayKey}">Начать тренировку</button>
-    <p class="small muted" style="margin-top:12px">Вес считается от твоего 1ПМ (лучшее из последних 3 тренировок, формула Эпли) под нужные повторы с запасом. Во время тренировки следующие подходы подстраиваются под то, как прошёл предыдущий.</p>
+    <button class="primary block" data-act="start" data-day="${dayKey}">${L('Начать тренировку', 'Start workout')}</button>
+    <p class="small muted" style="margin-top:12px">${L('Вес считается от твоего 1ПМ (лучшее из последних 3 тренировок, формула Эпли) под нужные повторы с запасом. Во время тренировки следующие подходы подстраиваются под то, как прошёл предыдущий.', 'Weights are calculated from your 1RM (best of your last 3 workouts, Epley formula) for the target reps with reps in reserve. During the workout, the next sets adjust to how the previous one went.')}</p>
   `;
 }
 
 function backupStatusText() {
   const age = backupAgeDays();
-  if (age == null) return '⚠️ Резервной копии ещё не было.';
-  const when = age === 0 ? 'сегодня' : age === 1 ? 'вчера' : `${age} дн. назад`;
-  return `${age > 7 ? '⚠️' : '✅'} Последняя копия: ${when}.`;
+  if (age == null) return L('⚠️ Резервной копии ещё не было.', '⚠️ No backup yet.');
+  const when = age === 0 ? L('сегодня', 'today') : age === 1 ? L('вчера', 'yesterday') : L(`${age} дн. назад`, `${age} days ago`);
+  return `${age > 7 ? '⚠️' : '✅'} ${L('Последняя копия', 'Last backup')}: ${when}.`;
 }
 
 // Напоминаем, если есть что терять, а копии не было больше 7 дней (не чаще раза в день).
@@ -212,11 +221,11 @@ function backupReminder() {
   if (load('gc.backupSnooze', null) === today()) return '';
   return `
     <div class="card backup-card">
-      <b>${age == null ? 'Сделай первую резервную копию' : `Копии не было ${age} дн.`}</b>
-      <p class="small muted" style="margin:4px 0 10px">Тренировки хранятся только на телефоне. Отправь копию себе в Telegram или на Google Диск: это одно нажатие.</p>
+      <b>${age == null ? L('Сделай первую резервную копию', 'Make your first backup') : L(`Копии не было ${age} дн.`, `No backup for ${age} days`)}</b>
+      <p class="small muted" style="margin:4px 0 10px">${L('Тренировки хранятся только на телефоне. Отправь копию себе в Telegram или на Google Диск: это одно нажатие.', 'Your workouts are stored only on this phone. Send a backup to yourself in Telegram or Google Drive: it takes one tap.')}</p>
       <div class="row">
-        <button class="primary small" data-act="share-backup">Поделиться копией</button>
-        <button class="ghost small" data-act="backup-later">Позже</button>
+        <button class="primary small" data-act="share-backup">${L('Поделиться копией', 'Share backup')}</button>
+        <button class="ghost small" data-act="backup-later">${L('Позже', 'Later')}</button>
       </div>
     </div>`;
 }
@@ -260,17 +269,17 @@ function renderSession() {
     <div class="card tight">
       <div class="row between">
         <div>
-          <div class="small muted">${fmtDate(d.date)} · ${mins} мин · ${doneSets} подх.</div>
-          <h3 style="margin:2px 0 0">${esc(d.title)}</h3>
+          <div class="small muted">${fmtDate(d.date)} · ${mins} ${L('мин', 'min')} · ${doneSets} ${L('подх.', 'sets')}</div>
+          <h3 style="margin:2px 0 0">${esc(dayTitle(d.title))}</h3>
         </div>
         <span class="pill"><span class="dot" style="background:${ph.color}"></span>${ph.label}</span>
       </div>
     </div>
     ${d.items.map((it, i) => renderItem(it, i)).join('')}
-    <button class="block add-ex-btn" data-act="open-add">＋ Добавить упражнение</button>
+    <button class="block add-ex-btn" data-act="open-add">＋ ${L('Добавить упражнение', 'Add exercise')}</button>
     <div class="row" style="gap:10px">
-      <button class="danger grow" data-act="cancel">Отменить</button>
-      <button class="primary grow" data-act="finish">Завершить и сохранить</button>
+      <button class="danger grow" data-act="cancel">${L('Отменить', 'Cancel')}</button>
+      <button class="primary grow" data-act="finish">${L('Завершить и сохранить', 'Finish and save')}</button>
     </div>
   `;
 }
@@ -281,28 +290,28 @@ function renderItem(it, i) {
   const rows = it.sets.map((s, j) => `
     <tr class="${s.done ? 'done' : ''}">
       <td class="n">${j + 1}</td>
-      <td><input type="number" inputmode="decimal" step="any" value="${s.w ?? ''}" data-i="${i}" data-j="${j}" data-f="w" placeholder="кг"></td>
+      <td><input type="number" inputmode="decimal" step="any" value="${s.w ?? ''}" data-i="${i}" data-j="${j}" data-f="w" placeholder="${L('кг', 'kg')}"></td>
       <td><input type="number" inputmode="numeric" value="${s.r ?? ''}" data-i="${i}" data-j="${j}" data-f="r"></td>
       <td><select data-i="${i}" data-j="${j}" data-f="rir">${[0, 1, 2, 3, 4].map(v => `<option value="${v}" ${+s.rir === v ? 'selected' : ''}>${v === 4 ? '4+' : v}</option>`).join('')}</select></td>
-      <td class="ok"><button class="check" data-act="toggle-set" data-i="${i}" data-j="${j}" aria-label="Подход выполнен">✓</button></td>
+      <td class="ok"><button class="check" data-act="toggle-set" data-i="${i}" data-j="${j}" aria-label="${L('Подход выполнен', 'Set done')}">✓</button></td>
     </tr>`).join('');
   return `
     <div class="card tight">
       <div class="ex-head">
         ${animThumb(it.name)}
-        <div class="ex-name grow">${esc(it.name)}</div>
-        <button class="ghost small" data-act="remove-ex" data-i="${i}" aria-label="Убрать упражнение">✕</button>
+        <div class="ex-name grow">${esc(exName(it.name))}</div>
+        <button class="ghost small" data-act="remove-ex" data-i="${i}" aria-label="${L('Убрать упражнение', 'Remove exercise')}">✕</button>
       </div>
       <div class="target">${targetText(p)}</div>
       ${p.meta.note ? `<div class="note small">${esc(p.meta.note)}</div>` : ''}
-      ${it.lastText ? `<div class="small muted">Прошлый раз ${esc(it.lastText)}</div>` : ''}
+      ${it.lastText ? `<div class="small muted">${L('Прошлый раз', 'Last time')} ${esc(it.lastText)}</div>` : ''}
       <table class="sets">
-        <thead><tr><th></th><th>${isBw ? 'Вес с телом' : 'Вес'}</th><th>Повт.</th><th>В запасе</th><th></th></tr></thead>
+        <thead><tr><th></th><th>${isBw ? L('Вес с телом', 'Incl. body') : L('Вес', 'Weight')}</th><th>${L('Повт.', 'Reps')}</th><th>${L('В запасе', 'RIR')}</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
       <div class="row" style="margin-top:6px">
-        <button class="small" data-act="add-set" data-i="${i}">+ подход</button>
-        ${it.sets.length > 1 ? `<button class="small ghost" data-act="del-set" data-i="${i}">− подход</button>` : ''}
+        <button class="small" data-act="add-set" data-i="${i}">+ ${L('подход', 'set')}</button>
+        ${it.sets.length > 1 ? `<button class="small ghost" data-act="del-set" data-i="${i}">− ${L('подход', 'set')}</button>` : ''}
       </div>
     </div>`;
 }
@@ -334,7 +343,7 @@ function finishSession() {
     }))
     .filter(ex => ex.sets.length);
   if (!exercises.length) {
-    if (!confirm('Нет отмеченных подходов. Выйти без сохранения?')) return;
+    if (!confirm(L('Нет отмеченных подходов. Выйти без сохранения?', 'No sets checked. Exit without saving?'))) return;
   } else {
     state.workouts.push({
       id: 'app-' + d.startedAt,
@@ -345,7 +354,8 @@ function finishSession() {
       phase: d.phaseKey,
     });
     persistWorkouts();
-    toast(`Сохранено: ${exercises.length} упр., ${exercises.reduce((n, e) => n + e.sets.length, 0)} подходов`);
+    const nSets = exercises.reduce((n, e) => n + e.sets.length, 0);
+    toast(L(`Сохранено: ${exercises.length} упр., ${nSets} подходов`, `Saved: ${exercises.length} exercises, ${nSets} sets`));
   }
   state.draft = null;
   save(KEYS.draft, null);
@@ -365,12 +375,12 @@ function nextUpLabel(i, j) {
     const from = a === i ? j + 1 : 0;
     const k = items[a].sets.findIndex((x, idx) => idx >= from && !x.done);
     if (k >= 0) {
-      const title = mediaFor(items[a].name)?.title || items[a].name;
+      const title = mediaFor(items[a].name)?.title || exName(items[a].name);
       const st = items[a].sets[k];
-      return `${title}, подход ${k + 1}${st.w ? ` · ${fmtW(+st.w)} кг × ${st.r}` : ''}`;
+      return `${title}, ${L('подход', 'set')} ${k + 1}${st.w ? ` · ${fmtW(+st.w)} ${L('кг', 'kg')} × ${st.r}` : ''}`;
     }
   }
-  return 'Все подходы выполнены — можно завершать';
+  return L('Все подходы выполнены — можно завершать', 'All sets done — you can finish');
 }
 
 function startTimer(sec, nextUp = '') {
@@ -405,11 +415,11 @@ function clockText(ms) {
 }
 function notifyRestStart() {
   if (!timer || !notifyEnabled() || !state.settings.watchNotifyStart) return;
-  showNote(`Отдых ${fmtSec(timer.total)} — до ${clockText(timer.end)}`, `Дальше: ${timer.nextUp}`);
+  showNote(L(`Отдых ${fmtSec(timer.total)} — до ${clockText(timer.end)}`, `Rest ${fmtSec(timer.total)} — until ${clockText(timer.end)}`), `${L('Дальше', 'Next')}: ${timer.nextUp}`);
 }
 function notifyRestEnd() {
   if (!timer || !notifyEnabled()) return;
-  showNote('Отдых закончен — подход!', `Дальше: ${timer.nextUp}`);
+  showNote(L('Отдых закончен — подход!', 'Rest is over — next set!'), `${L('Дальше', 'Next')}: ${timer.nextUp}`);
 }
 async function closeRestNote() {
   try {
@@ -419,11 +429,11 @@ async function closeRestNote() {
 }
 
 async function enableWatchNotify() {
-  if (!('Notification' in window)) { toast('Этот браузер не умеет показывать уведомления'); return false; }
+  if (!('Notification' in window)) { toast(L('Этот браузер не умеет показывать уведомления', 'This browser can\'t show notifications')); return false; }
   let perm = Notification.permission;
   if (perm === 'default') perm = await Notification.requestPermission();
   if (perm !== 'granted') {
-    toast('Уведомления запрещены. Разреши их: Настройки Android → Приложения → GymCoach → Уведомления');
+    toast(L('Уведомления запрещены. Разреши их: Настройки Android → Приложения → GymCoach → Уведомления', 'Notifications are blocked. Allow them: Android Settings → Apps → GymCoach → Notifications'));
     return false;
   }
   return true;
@@ -478,12 +488,12 @@ document.addEventListener('visibilitychange', () => {
 function renderHistory() {
   const list = [...state.workouts].reverse();
   if (!list.length) {
-    view.innerHTML = `<div class="empty muted">Пока пусто. Импортируй дневник в настройках или проведи первую тренировку.</div>`;
+    view.innerHTML = `<div class="empty muted">${L('Пока пусто. Импортируй дневник в настройках или проведи первую тренировку.', 'Nothing here yet. Import your diary in Settings or do your first workout.')}</div>`;
     return;
   }
   const shown = list.slice(0, state.historyLimit);
   view.innerHTML = `
-    <h2>История <span class="muted small">${list.length} тренировок</span></h2>
+    <h2>${L('История', 'History')} <span class="muted small">${list.length} ${L('тренировок', 'workouts')}</span></h2>
     ${shown.map(w => {
       const sets = w.exercises.reduce((n, e) => n + e.sets.length, 0);
       const ph = w.phase ? E.PHASES[w.phase] : null;
@@ -494,18 +504,18 @@ function renderHistory() {
             <b>${fmtDate(w.date)}</b>
             ${ph ? `<span class="pill"><span class="dot" style="background:${ph.color}"></span>${ph.label}</span>` : ''}
           </div>
-          <div class="small muted">${w.exercises.length} упр. · ${sets} подх.${w.duration ? ` · ${w.duration} мин` : ''} · ${esc(w.exercises.slice(0, 3).map(e => e.name.split(' · ')[0]).join(', '))}${w.exercises.length > 3 ? '…' : ''}</div>
+          <div class="small muted">${w.exercises.length} ${L('упр.', 'ex.')} · ${sets} ${L('подх.', 'sets')}${w.duration ? ` · ${w.duration} ${L('мин', 'min')}` : ''} · ${esc(w.exercises.slice(0, 3).map(e => exName(e.name).split(' · ')[0]).join(', '))}${w.exercises.length > 3 ? '…' : ''}</div>
         </summary>
         <div class="body">
           ${w.exercises.map(e => `
-            <div class="ex-line"><div>${esc(e.name)}</div>
-            <div class="sets-txt">${e.sets.map(s => s.raw ? esc(s.raw) : `${fmtW(s.w)}×${s.r}${s.flag ? ` <i>${esc(s.flag)}</i>` : ''}${s.rir != null ? ` <span title="в запасе">(${s.rir})</span>` : ''}`).join(' · ')}</div></div>`).join('')}
+            <div class="ex-line"><div>${esc(exName(e.name))}</div>
+            <div class="sets-txt">${e.sets.map(s => s.raw ? esc(s.raw) : `${fmtW(s.w)}×${s.r}${s.flag ? ` <i>${esc(s.flag)}</i>` : ''}${s.rir != null ? ` <span title="${L('в запасе', 'reps in reserve')}">(${s.rir})</span>` : ''}`).join(' · ')}</div></div>`).join('')}
           ${w.note ? `<div class="small muted">${esc(w.note)}</div>` : ''}
-          <div class="row" style="margin-top:8px"><button class="small danger" data-act="del-workout" data-id="${esc(w.id)}">Удалить тренировку</button></div>
+          <div class="row" style="margin-top:8px"><button class="small danger" data-act="del-workout" data-id="${esc(w.id)}">${L('Удалить тренировку', 'Delete workout')}</button></div>
         </div>
       </details>`;
     }).join('')}
-    ${list.length > shown.length ? `<button class="block" data-act="more-history">Показать ещё</button>` : ''}
+    ${list.length > shown.length ? `<button class="block" data-act="more-history">${L('Показать ещё', 'Show more')}</button>` : ''}
   `;
 }
 
@@ -518,7 +528,7 @@ function renderProgress() {
   }
   const names = Object.entries(counts).filter(([, c]) => c >= 3).sort((a, b) => b[1] - a[1]).map(([n]) => n);
   if (!names.length) {
-    view.innerHTML = `<div class="empty muted">Нужно хотя бы 3 тренировки с упражнением, чтобы построить график.</div>`;
+    view.innerHTML = `<div class="empty muted">${L('Нужно хотя бы 3 тренировки с упражнением, чтобы построить график.', 'You need at least 3 workouts with an exercise to draw a chart.')}</div>`;
     return;
   }
   if (!state.progressEx || !names.includes(state.progressEx)) {
@@ -532,25 +542,26 @@ function renderProgress() {
   const best = all.reduce((m, s) => (s.best > m.best ? s : m), all[0]);
   const cur = E.currentE1rm(name, state.workouts, t);
   const tr = E.trend(name, state.workouts, t);
+  const ranges = [[90, L('3 мес', '3 mo')], [180, L('6 мес', '6 mo')], [365, L('Год', 'Year')], [0, L('Всё', 'All')]];
 
   view.innerHTML = `
-    <h2>Прогресс</h2>
+    <h2>${L('Прогресс', 'Progress')}</h2>
     <select id="progressEx" style="width:100%;margin-bottom:10px">
-      ${names.map(n => `<option ${n === name ? 'selected' : ''}>${esc(n)}</option>`).join('')}
+      ${names.map(n => `<option value="${esc(n)}" ${n === name ? 'selected' : ''}>${esc(exName(n))}</option>`).join('')}
     </select>
     <div class="chips">
-      ${[[90, '3 мес'], [180, '6 мес'], [365, 'Год'], [0, 'Всё']].map(([v, l]) => `<button class="chip ${state.progressRange === v ? 'on' : ''}" data-range="${v}">${l}</button>`).join('')}
+      ${ranges.map(([v, l]) => `<button class="chip ${state.progressRange === v ? 'on' : ''}" data-range="${v}">${l}</button>`).join('')}
     </div>
     <div class="stat-grid" style="margin-bottom:12px">
-      <div class="stat"><div class="v">${cur ? Math.round(cur) : '—'}</div><div class="l">1ПМ сейчас, кг</div></div>
-      <div class="stat"><div class="v">${best ? Math.round(best.best) : '—'}</div><div class="l">Рекорд${best ? ', ' + fmtDate(best.date, true).split(', ')[1] : ''}</div></div>
-      <div class="stat"><div class="v">${tr ? pct(tr.change) : '—'}</div><div class="l">За 5 недель</div></div>
+      <div class="stat"><div class="v">${cur ? Math.round(cur) : '—'}</div><div class="l">${L('1ПМ сейчас, кг', '1RM now, kg')}</div></div>
+      <div class="stat"><div class="v">${best ? Math.round(best.best) : '—'}</div><div class="l">${L('Рекорд', 'Record')}${best ? ', ' + fmtDate(best.date, true).split(', ')[1] : ''}</div></div>
+      <div class="stat"><div class="v">${tr ? pct(tr.change) : '—'}</div><div class="l">${L('За 5 недель', 'Over 5 weeks')}</div></div>
     </div>
     <div class="card">${chartSvg(ss)}</div>
     <div class="card tight">
-      <h3>Последние тренировки</h3>
+      <h3>${L('Последние тренировки', 'Recent workouts')}</h3>
       <table class="list">
-        <tr><th>Дата</th><th>Подходы</th><th class="num">1ПМ</th></tr>
+        <tr><th>${L('Дата', 'Date')}</th><th>${L('Подходы', 'Sets')}</th><th class="num">${L('1ПМ', '1RM')}</th></tr>
         ${all.slice(-8).reverse().map(s => `<tr><td>${fmtDate(s.date, false)}</td><td class="small">${esc(E.formatSets(s.sets))}</td><td class="num">${Math.round(s.best)}</td></tr>`).join('')}
       </table>
     </div>
@@ -558,30 +569,30 @@ function renderProgress() {
 }
 
 function chartSvg(ss) {
-  if (ss.length < 2) return '<div class="muted small">Мало точек за этот период.</div>';
-  const W = 360, H = 200, L = 30, R = 8, T = 8, B = 20;
+  if (ss.length < 2) return `<div class="muted small">${L('Мало точек за этот период.', 'Not enough points for this period.')}</div>`;
+  const W = 360, H = 200, Lp = 30, R = 8, T = 8, B = 20;
   const xs = ss.map(s => E.parseISO(s.date).getTime());
   const ys = ss.map(s => s.best);
   const x0 = Math.min(...xs), x1 = Math.max(...xs) || x0 + 1;
   let y0 = Math.min(...ys), y1 = Math.max(...ys);
   const pad = Math.max(2, (y1 - y0) * 0.1);
   y0 = Math.floor(y0 - pad); y1 = Math.ceil(y1 + pad);
-  const X = x => L + ((x - x0) / (x1 - x0 || 1)) * (W - L - R);
+  const X = x => Lp + ((x - x0) / (x1 - x0 || 1)) * (W - Lp - R);
   const Y = y => T + (1 - (y - y0) / (y1 - y0 || 1)) * (H - T - B);
   // скользящее среднее по 5 точкам — показывает тренд без шума
   const ma = ys.map((_, i) => { const a = ys.slice(Math.max(0, i - 4), i + 1); return a.reduce((p, c) => p + c, 0) / a.length; });
-  const grid = [0, 0.5, 1].map(f => { const v = y0 + (y1 - y0) * f; return `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${L - 6}" y="${Y(v) + 4}" text-anchor="end">${Math.round(v)}</text>`; }).join('');
+  const grid = [0, 0.5, 1].map(f => { const v = y0 + (y1 - y0) * f; return `<line x1="${Lp}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${Lp - 6}" y="${Y(v) + 4}" text-anchor="end">${Math.round(v)}</text>`; }).join('');
   const d0 = new Date(x0), d1 = new Date(x1);
-  const lbl = d => `${MONTHS_RU[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`;
+  const lbl = d => `${MONTHS[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`;
   return `
-    <svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="1ПМ по тренировкам">
+    <svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${L('1ПМ по тренировкам', '1RM by workout')}">
       ${grid}
       ${ss.map((s, i) => `<circle cx="${X(xs[i])}" cy="${Y(ys[i])}" r="2.5" fill="var(--info)" opacity=".55"/>`).join('')}
       <polyline fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" points="${ma.map((v, i) => `${X(xs[i])},${Y(v)}`).join(' ')}"/>
-      <text x="${L}" y="${H - 6}">${lbl(d0)}</text>
+      <text x="${Lp}" y="${H - 6}">${lbl(d0)}</text>
       <text x="${W - R}" y="${H - 6}" text-anchor="end">${lbl(d1)}</text>
     </svg>
-    <div class="small muted">Точки — 1ПМ по лучшему подходу тренировки, линия — среднее по 5 тренировкам.</div>`;
+    <div class="small muted">${L('Точки — 1ПМ по лучшему подходу тренировки, линия — среднее по 5 тренировкам.', 'Dots are the 1RM from each workout\'s best set, the line is the average over 5 workouts.')}</div>`;
 }
 
 // ---------- АНАЛИЗ ----------
@@ -591,7 +602,7 @@ const KEY_LIFTS = ['Bench Press · Barbell', 'Incline Bench Press · Barbell', '
 
 function renderAnalysis() {
   if (!state.workouts.length) {
-    view.innerHTML = `<div class="empty muted">Анализ появится после импорта истории.</div>`;
+    view.innerHTML = `<div class="empty muted">${L('Анализ появится после импорта истории.', 'Analysis will appear after you import your history.')}</div>`;
     return;
   }
   const t = today();
@@ -601,24 +612,25 @@ function renderAnalysis() {
   const vol = E.weeklySetsByMuscle(state.workouts, anchor, 4);
   const maxV = Math.max(22, ...Object.values(vol));
   const zr = E.repZoneResponse(state.workouts, KEY_LIFTS, t);
-  const zoneNames = { strength: 'Сила (1–6)', hypertrophy: 'Масса (7–11)', volume: 'Объём (12+)' };
+  const zoneNames = L({ strength: 'Сила (1–6)', hypertrophy: 'Масса (7–11)', volume: 'Объём (12+)' },
+    { strength: 'Strength (1–6)', hypertrophy: 'Hypertrophy (7–11)', volume: 'Volume (12+)' });
   const zEntries = Object.entries(zr.zones).filter(([, z]) => z.n >= 5);
   const bestZone = zEntries.length ? zEntries.reduce((a, b) => (b[1].mean > a[1].mean ? b : a)) : null;
 
   const lifts = KEY_LIFTS.map(n => ({ n, e: E.currentE1rm(n, state.workouts, t), tr: E.trend(n, state.workouts, anchor, 56) })).filter(x => x.e);
 
   view.innerHTML = `
-    <h2>Анализ</h2>
-    ${anchor !== t ? `<p class="small muted">Последняя запись ${fmtDate(lastDate)}, поэтому считаю по 4 неделям до неё.</p>` : ''}
+    <h2>${L('Анализ', 'Analysis')}</h2>
+    ${anchor !== t ? `<p class="small muted">${L(`Последняя запись ${fmtDate(lastDate)}, поэтому считаю по 4 неделям до неё.`, `Last entry is ${fmtDate(lastDate)}, so I'm using the 4 weeks before it.`)}</p>` : ''}
     <div class="stat-grid" style="margin-bottom:12px">
-      <div class="stat"><div class="v">${state.workouts.length}</div><div class="l">тренировок всего</div></div>
-      <div class="stat"><div class="v">${freq.perWeek.toFixed(1)}</div><div class="l">в неделю (12 нед.)</div></div>
-      <div class="stat"><div class="v">${freq.avgDuration ? Math.round(freq.avgDuration) : '—'}</div><div class="l">мин в среднем</div></div>
+      <div class="stat"><div class="v">${state.workouts.length}</div><div class="l">${L('тренировок всего', 'workouts total')}</div></div>
+      <div class="stat"><div class="v">${freq.perWeek.toFixed(1)}</div><div class="l">${L('в неделю (12 нед.)', 'per week (12 wk)')}</div></div>
+      <div class="stat"><div class="v">${freq.avgDuration ? Math.round(freq.avgDuration) : '—'}</div><div class="l">${L('мин в среднем', 'min on average')}</div></div>
     </div>
 
     <div class="card">
-      <h3>Рабочих подходов в неделю на мышцу</h3>
-      <p class="small muted">Среднее за 4 недели. Зелёная зона — 10–20 подходов, это оптимум для массы.</p>
+      <h3>${L('Рабочих подходов в неделю на мышцу', 'Working sets per muscle per week')}</h3>
+      <p class="small muted">${L('Среднее за 4 недели. Зелёная зона — 10–20 подходов, это оптимум для массы.', 'Average over 4 weeks. The green zone is 10–20 sets, the sweet spot for muscle growth.')}</p>
       ${Object.entries(vol).map(([m, v]) => {
         const color = v < 10 ? 'var(--warn)' : v > 22 ? 'var(--bad)' : 'var(--accent)';
         return `<div class="hbar"><span>${E.MUSCLE_LABELS[m]}</span>
@@ -628,19 +640,19 @@ function renderAnalysis() {
     </div>
 
     <div class="card">
-      <h3>Какие повторы давали тебе рост силы</h3>
-      <p class="small muted">По всей истории основных упражнений: отрезки по 4 недели, где ты работал в основном в одном диапазоне, и как изменился 1ПМ за следующие 4 недели.</p>
+      <h3>${L('Какие повторы давали тебе рост силы', 'Which rep ranges made you stronger')}</h3>
+      <p class="small muted">${L('По всей истории основных упражнений: отрезки по 4 недели, где ты работал в основном в одном диапазоне, и как изменился 1ПМ за следующие 4 недели.', 'Across your whole history of main lifts: 4-week stretches where you trained mostly in one rep range, and how your 1RM changed over the next 4 weeks.')}</p>
       <table class="list">
-        <tr><th>Диапазон</th><th class="num">Отрезков</th><th class="num">Изменение 1ПМ</th></tr>
+        <tr><th>${L('Диапазон', 'Range')}</th><th class="num">${L('Отрезков', 'Stretches')}</th><th class="num">${L('Изменение 1ПМ', '1RM change')}</th></tr>
         ${Object.entries(zr.zones).map(([k, z]) => `<tr><td>${zoneNames[k]}</td><td class="num">${z.n}</td><td class="num">${z.mean == null ? '—' : pct(z.mean)}</td></tr>`).join('')}
       </table>
       <p class="small" style="margin-bottom:0">${zoneConclusion(zEntries, bestZone)}</p>
     </div>
 
     <div class="card">
-      <h3>Основные упражнения</h3>
+      <h3>${L('Основные упражнения', 'Main lifts')}</h3>
       <table class="list">
-        <tr><th>Упражнение</th><th class="num">1ПМ</th><th class="num">8 нед.</th></tr>
+        <tr><th>${L('Упражнение', 'Exercise')}</th><th class="num">${L('1ПМ', '1RM')}</th><th class="num">${L('8 нед.', '8 wk')}</th></tr>
         ${lifts.map(x => `<tr><td>${esc(x.n)}</td><td class="num">${Math.round(x.e)}</td><td class="num">${x.tr ? `<span class="badge ${x.tr.status}">${pct(x.tr.change)}</span>` : '—'}</td></tr>`).join('')}
       </table>
     </div>
@@ -648,13 +660,15 @@ function renderAnalysis() {
 }
 
 function zoneConclusion(zEntries, bestZone) {
-  if (!bestZone) return 'Пока мало данных для вывода.';
+  if (!bestZone) return L('Пока мало данных для вывода.', 'Not enough data for a conclusion yet.');
   const allFlat = zEntries.every(([, z]) => Math.abs(z.mean) < 0.01);
   if (allFlat) {
-    return 'Ни один диапазон сам по себе не давал роста: сила почти не менялась при любых повторах. Значит, дело не в повторах, а в отсутствии системы прогрессии. Именно это и исправляют блоки: каждая неделя со своей целью и вес, который растёт вслед за 1ПМ.';
+    return L('Ни один диапазон сам по себе не давал роста: сила почти не менялась при любых повторах. Значит, дело не в повторах, а в отсутствии системы прогрессии. Именно это и исправляют блоки: каждая неделя со своей целью и вес, который растёт вслед за 1ПМ.',
+      'No rep range on its own made you stronger: strength barely changed whatever the reps. So the problem isn\'t the reps, it\'s the lack of a progression system. That\'s exactly what the blocks fix: each week has its own goal, and the weight grows along with your 1RM.');
   }
-  const names = { strength: 'малых', hypertrophy: 'средних', volume: 'больших' };
-  return `Лучше всего тебе заходили отрезки с упором на ${names[bestZone[0]]} повторы (${pct(bestZone[1].mean)} за 4 недели). Это наблюдение, а не точный эксперимент: через 2–3 блока в приложении вывод станет надёжнее.`;
+  const names = L({ strength: 'малых', hypertrophy: 'средних', volume: 'больших' }, { strength: 'low', hypertrophy: 'moderate', volume: 'high' });
+  return L(`Лучше всего тебе заходили отрезки с упором на ${names[bestZone[0]]} повторы (${pct(bestZone[1].mean)} за 4 недели). Это наблюдение, а не точный эксперимент: через 2–3 блока в приложении вывод станет надёжнее.`,
+    `Stretches focused on ${names[bestZone[0]]} reps worked best for you (${pct(bestZone[1].mean)} over 4 weeks). This is an observation, not a controlled experiment: after 2–3 blocks in the app the conclusion will be more reliable.`);
 }
 
 // ---------- НАСТРОЙКИ ----------
@@ -665,78 +679,94 @@ function renderSettings() {
   const days = Object.entries(state.templates).sort(([a], [b]) => ((+a + 6) % 7) - ((+b + 6) % 7));
   const freeDays = [1, 2, 3, 4, 5, 6, 0].filter(d => !state.templates[d]);
   view.innerHTML = `
-    <h2>Настройки</h2>
+    <h2>${L('Настройки', 'Settings')}</h2>
     <div class="card">
-      <h3>Периодизация</h3>
-      <p class="small muted">Блок из 4 недель: ${s.phaseOrder.map(k => E.PHASES[k].label).join(' → ')}. Сейчас: блок ${ph.blockNo}, неделя ${ph.weekInBlock}, «${ph.phase.label}».</p>
-      <label class="field"><span>Начало блока (понедельник)</span><input type="date" id="blockStart" value="${s.blockStart}"></label>
-      <button class="block" data-act="block-now">Начать новый блок с этой недели</button>
-      <label class="field"><span>Эта неделя</span>
+      <h3>Язык · Language</h3>
+      <div class="row" style="gap:10px">
+        <button class="grow ${LANG === 'ru' ? 'primary' : ''}" data-act="lang" data-lang="ru">Русский</button>
+        <button class="grow ${LANG === 'en' ? 'primary' : ''}" data-act="lang" data-lang="en">English</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>${L('Периодизация', 'Periodization')}</h3>
+      <p class="small muted">${L(`Блок из 4 недель: ${s.phaseOrder.map(k => E.PHASES[k].label).join(' → ')}. Сейчас: блок ${ph.blockNo}, неделя ${ph.weekInBlock}, «${ph.phase.label}».`,
+        `4-week block: ${s.phaseOrder.map(k => E.PHASES[k].label).join(' → ')}. Now: block ${ph.blockNo}, week ${ph.weekInBlock}, "${ph.phase.label}".`)}</p>
+      <label class="field"><span>${L('Начало блока (понедельник)', 'Block start (Monday)')}</span><input type="date" id="blockStart" value="${s.blockStart}"></label>
+      <button class="block" data-act="block-now">${L('Начать новый блок с этой недели', 'Start a new block this week')}</button>
+      <label class="field"><span>${L('Эта неделя', 'This week')}</span>
         <select id="phaseOverride">
-          <option value="">Авто (${E.PHASES[s.phaseOrder[ph.weekInBlock - 1]].label})</option>
+          <option value="">${L('Авто', 'Auto')} (${E.PHASES[s.phaseOrder[ph.weekInBlock - 1]].label})</option>
           ${Object.entries(E.PHASES).map(([k, p]) => `<option value="${k}" ${s.phaseOverride?.week === ph.weekStart && s.phaseOverride.key === k ? 'selected' : ''}>${p.label}</option>`).join('')}
         </select>
       </label>
-      <label class="field"><span>Порядок недель в блоке</span>
+      <label class="field"><span>${L('Порядок недель в блоке', 'Order of weeks in a block')}</span>
         <select id="phaseOrder">
           ${[['volume', 'hypertrophy', 'strength', 'deload'], ['strength', 'volume', 'hypertrophy', 'deload'], ['hypertrophy', 'volume', 'strength', 'deload']]
             .map(o => `<option value="${o.join(',')}" ${o.join(',') === s.phaseOrder.join(',') ? 'selected' : ''}>${o.map(k => E.PHASES[k].label).join(' → ')}</option>`).join('')}
         </select>
       </label>
-      <label class="field"><span>Вес тела, кг (для подтягиваний и брусьев)</span><input type="number" inputmode="decimal" step="0.1" id="bodyweight" value="${s.bodyweight}"></label>
+      <label class="field"><span>${L('Вес тела, кг (для подтягиваний и брусьев)', 'Bodyweight, kg (for pull-ups and dips)')}</span><input type="number" inputmode="decimal" step="0.1" id="bodyweight" value="${s.bodyweight}"></label>
     </div>
 
     <div class="card">
-      <h3>Дни и упражнения</h3>
+      <h3>${L('Дни и упражнения', 'Days and exercises')}</h3>
       ${days.map(([d, t]) => `
         <div style="margin:12px 0 4px" class="row between">
           <b>${E.WEEKDAYS[d]}</b>
-          <input value="${esc(t.title)}" data-tpl-title="${d}" style="flex:1">
-          <button class="small ghost danger" data-act="del-day" data-day="${d}" aria-label="Удалить день">✕</button>
+          <input value="${esc(dayTitle(t.title))}" data-tpl-title="${d}" style="flex:1">
+          <button class="small ghost danger" data-act="del-day" data-day="${d}" aria-label="${L('Удалить день', 'Delete day')}">✕</button>
         </div>
         ${t.exercises.map((n, i) => `
-          <div class="tpl-item">${animThumb(n, 'mini')}<span>${esc(mediaFor(n)?.title || n)}<small class="muted" style="display:block">${esc(n)}</small></span>
-            <button class="small ghost" data-act="tpl-up" data-day="${d}" data-i="${i}" aria-label="Выше">↑</button>
-            <button class="small ghost" data-act="tpl-del" data-day="${d}" data-i="${i}" aria-label="Убрать">✕</button>
+          <div class="tpl-item">${animThumb(n, 'mini')}<span>${esc(mediaFor(n)?.title || exName(n))}<small class="muted" style="display:block">${esc(exName(n))}</small></span>
+            <button class="small ghost" data-act="tpl-up" data-day="${d}" data-i="${i}" aria-label="${L('Выше', 'Move up')}">↑</button>
+            <button class="small ghost" data-act="tpl-del" data-day="${d}" data-i="${i}" aria-label="${L('Убрать', 'Remove')}">✕</button>
           </div>`).join('')}
-        <button class="small" style="margin-top:6px" data-act="tpl-add" data-day="${d}">＋ Добавить упражнение</button>`).join('')}
+        <button class="small" style="margin-top:6px" data-act="tpl-add" data-day="${d}">＋ ${L('Добавить упражнение', 'Add exercise')}</button>`).join('')}
       ${freeDays.length ? `
         <div class="row" style="margin-top:14px">
           <select id="newDay">${freeDays.map(d => `<option value="${d}">${E.WEEKDAYS[d]}</option>`).join('')}</select>
-          <button class="small" data-act="add-day">Добавить день</button>
+          <button class="small" data-act="add-day">${L('Добавить день', 'Add day')}</button>
         </div>` : ''}
-      <button class="small ghost" style="margin-top:10px" data-act="reset-tpl">Вернуть программу по умолчанию</button>
+      <button class="small ghost" style="margin-top:10px" data-act="reset-tpl">${L('Вернуть программу по умолчанию', 'Restore the default program')}</button>
     </div>
 
     <div class="card">
-      <h3>Часы и уведомления</h3>
-      <p class="small muted">Когда отдых заканчивается, GymCoach присылает уведомление. Zepp пересылает его на часы Amazfit, и они вибрируют, так что кнопку таймера на часах нажимать не нужно.</p>
-      <label class="switch"><input type="checkbox" id="watchNotify" ${s.watchNotify && typeof Notification !== 'undefined' && Notification.permission === 'granted' ? 'checked' : ''}><span>Сигнал «Отдых закончен» на часы</span></label>
-      <label class="switch"><input type="checkbox" id="watchNotifyStart" ${s.watchNotifyStart ? 'checked' : ''}><span>Ещё и в начале отдыха: «Отдых до 15:08:30» (часы вибрируют дважды)</span></label>
-      <button class="block" data-act="test-notify" style="margin-top:8px">Проверить на часах (сигнал через 5 секунд)</button>
-      <details class="small muted" style="margin-top:10px"><summary>Если на часы не приходит</summary>
-        <ol class="steps">
+      <h3>${L('Часы и уведомления', 'Watch and notifications')}</h3>
+      <p class="small muted">${L('Когда отдых заканчивается, GymCoach присылает уведомление. Zepp пересылает его на часы Amazfit, и они вибрируют, так что кнопку таймера на часах нажимать не нужно.',
+        'When rest ends, GymCoach sends a notification. Zepp forwards it to your Amazfit watch and it vibrates, so you don\'t need to press a timer on the watch.')}</p>
+      <label class="switch"><input type="checkbox" id="watchNotify" ${s.watchNotify && typeof Notification !== 'undefined' && Notification.permission === 'granted' ? 'checked' : ''}><span>${L('Сигнал «Отдых закончен» на часы', '"Rest is over" alert on the watch')}</span></label>
+      <label class="switch"><input type="checkbox" id="watchNotifyStart" ${s.watchNotifyStart ? 'checked' : ''}><span>${L('Ещё и в начале отдыха: «Отдых до 15:08:30» (часы вибрируют дважды)', 'Also at the start of rest: "Rest until 15:08:30" (the watch vibrates twice)')}</span></label>
+      <button class="block" data-act="test-notify" style="margin-top:8px">${L('Проверить на часах (сигнал через 5 секунд)', 'Test on the watch (alert in 5 seconds)')}</button>
+      <details class="small muted" style="margin-top:10px"><summary>${L('Если на часы не приходит', 'If nothing arrives on the watch')}</summary>
+        <ol class="steps">${L(`
           <li>Zepp → Профиль → Amazfit GTS 4 mini → Уведомления: включи и отметь в списке приложений <b>Chrome</b>. Иногда GymCoach показан отдельной строкой — тогда отметь её.</li>
           <li>Android: Настройки → Приложения → GymCoach (или Chrome) → Уведомления → разрешить.</li>
           <li>На часах выключи «Не беспокоить». В Zepp проверь, что пересылка работает и при включённом экране телефона: опция вроде «Уведомлять, даже когда телефон разблокирован».</li>
-          <li>Во время тренировки не блокируй телефон кнопкой: приложение само не даёт экрану погаснуть. Если заблокировать, сигнал может прийти с опозданием.</li>
+          <li>Во время тренировки не блокируй телефон кнопкой: приложение само не даёт экрану погаснуть. Если заблокировать, сигнал может прийти с опозданием.</li>`, `
+          <li>Zepp → Profile → Amazfit GTS 4 mini → Notifications: turn them on and tick <b>Chrome</b> in the app list. Sometimes GymCoach is listed separately — then tick that.</li>
+          <li>Android: Settings → Apps → GymCoach (or Chrome) → Notifications → allow.</li>
+          <li>Turn off "Do not disturb" on the watch. In Zepp, check that forwarding also works while the phone screen is on: an option like "Notify even when the phone is unlocked".</li>
+          <li>If the alert comes late with the phone locked, keep the screen on during the workout: the app stops it from turning off by itself.</li>`)}
         </ol>
       </details>
     </div>
 
     <div class="card">
-      <h3>Данные</h3>
-      <p class="small muted">Всё хранится только на этом телефоне. Отправляй копию в Telegram «Избранное» или на Google Диск раз в неделю: тогда данные не пропадут даже при потере телефона.</p>
+      <h3>${L('Данные', 'Data')}</h3>
+      <p class="small muted">${L('Всё хранится только на этом телефоне. Отправляй копию в Telegram «Избранное» или на Google Диск раз в неделю: тогда данные не пропадут даже при потере телефона.',
+        'Everything is stored only on this phone. Send a backup to Telegram "Saved Messages" or Google Drive once a week: then your data is safe even if you lose the phone.')}</p>
       <p class="small" style="margin:0 0 10px">${backupStatusText()}</p>
       <div class="row" style="flex-direction:column;align-items:stretch">
-        <button class="primary" data-act="share-backup">Поделиться копией (Telegram, Google Диск…)</button>
-        <button data-act="export-json">Скачать копию в «Загрузки»</button>
-        <button data-act="import-txt">Импортировать TXT из GymKeeper</button>
-        <button data-act="import-json">Восстановить из резервной копии</button>
-        <button class="danger" data-act="wipe">Удалить все данные</button>
+        <button class="primary" data-act="share-backup">${L('Поделиться копией (Telegram, Google Диск…)', 'Share backup (Telegram, Google Drive…)')}</button>
+        <button data-act="export-json">${L('Скачать копию в «Загрузки»', 'Download backup to Downloads')}</button>
+        <button data-act="import-txt">${L('Импортировать TXT из GymKeeper', 'Import TXT from GymKeeper')}</button>
+        <button data-act="import-json">${L('Восстановить из резервной копии', 'Restore from backup')}</button>
+        <button class="danger" data-act="wipe">${L('Удалить все данные', 'Delete all data')}</button>
       </div>
     </div>
-    <p class="small muted">ИИ-советы (Claude) подключим следующим шагом: сейчас все расчёты делает код прямо в телефоне, без интернета.</p>
+    <p class="small muted">${L('ИИ-советы (Claude) подключим следующим шагом: сейчас все расчёты делает код прямо в телефоне, без интернета.',
+      'AI tips (Claude) will come next: for now all calculations run right on the phone, without internet.')}</p>
   `;
 }
 
@@ -744,12 +774,12 @@ function renderSettings() {
 
 function importTxt(text) {
   const { workouts } = parseGymKeeperTxt(text);
-  if (!workouts.length) { toast('В файле не нашлось тренировок'); return; }
+  if (!workouts.length) { toast(L('В файле не нашлось тренировок', 'No workouts found in the file')); return; }
   // импортированные заменяем целиком, свои тренировки из приложения не трогаем
   const own = state.workouts.filter(w => w.source !== 'import');
   state.workouts = [...workouts, ...own];
   persistWorkouts();
-  toast(`Импортировано ${workouts.length} тренировок`);
+  toast(L(`Импортировано ${workouts.length} тренировок`, `Imported ${workouts.length} workouts`));
   render();
 }
 
@@ -785,7 +815,7 @@ function backupAgeDays() {
 function exportJson() {
   download(backupName(), backupText());
   markBackup();
-  toast('Копия сохранена в «Загрузки»');
+  toast(L('Копия сохранена в «Загрузки»', 'Backup saved to Downloads'));
 }
 
 // Меню Android «Поделиться»: копия уходит в Telegram «Избранное», Google Диск и т.п.
@@ -794,12 +824,12 @@ async function shareBackup() {
   const file = new File([backupText()], backupName(), { type: 'text/plain' });
   if (navigator.canShare?.({ files: [file] })) {
     try {
-      await navigator.share({ files: [file], title: 'GymCoach — резервная копия', text: `Резервная копия GymCoach от ${fmtDate(today())}` });
+      await navigator.share({ files: [file], title: L('GymCoach — резервная копия', 'GymCoach — backup'), text: L(`Резервная копия GymCoach от ${fmtDate(today())}`, `GymCoach backup from ${fmtDate(today())}`) });
       markBackup();
-      toast('Копия отправлена');
+      toast(L('Копия отправлена', 'Backup sent'));
       render();
     } catch (e) {
-      if (e.name !== 'AbortError') toast('Не получилось поделиться: ' + e.message);
+      if (e.name !== 'AbortError') toast(L('Не получилось поделиться: ', 'Could not share: ') + e.message);
     }
   } else {
     exportJson();
@@ -809,9 +839,10 @@ async function shareBackup() {
 
 function importJson(text) {
   let data;
-  try { data = JSON.parse(text); } catch { toast('Это не файл резервной копии'); return; }
-  if (data.app !== 'gymcoach' || !Array.isArray(data.workouts)) { toast('Это не файл резервной копии GymCoach'); return; }
-  if (!confirm(`Заменить текущие данные копией от ${String(data.exportedAt).slice(0, 10)} (${data.workouts.length} тренировок)?`)) return;
+  try { data = JSON.parse(text); } catch { toast(L('Это не файл резервной копии', 'This is not a backup file')); return; }
+  if (data.app !== 'gymcoach' || !Array.isArray(data.workouts)) { toast(L('Это не файл резервной копии GymCoach', 'This is not a GymCoach backup file')); return; }
+  const bDate = String(data.exportedAt).slice(0, 10);
+  if (!confirm(L(`Заменить текущие данные копией от ${bDate} (${data.workouts.length} тренировок)?`, `Replace current data with the backup from ${bDate} (${data.workouts.length} workouts)?`))) return;
   state.workouts = data.workouts;
   state.settings = { ...E.DEFAULT_SETTINGS, ...data.settings };
   state.templates = data.templates || E.DEFAULT_TEMPLATES;
@@ -820,7 +851,7 @@ function importJson(text) {
   save(KEYS.templates, state.templates);
   if (data.media) save('gc.media', data.media);
   markBackup();
-  toast('Восстановлено');
+  toast(L('Восстановлено', 'Restored'));
   setTimeout(() => location.reload(), 800);
 }
 
@@ -865,27 +896,27 @@ view.addEventListener('click', async e => {
     }
     case 'del-set': state.draft.items[i].sets.pop(); save(KEYS.draft, state.draft); renderSession(); break;
     case 'remove-ex':
-      if (state.draft.items[i].sets.some(s => s.done) && !confirm('В упражнении есть выполненные подходы. Убрать?')) return;
+      if (state.draft.items[i].sets.some(s => s.done) && !confirm(L('В упражнении есть выполненные подходы. Убрать?', 'This exercise has completed sets. Remove it?'))) return;
       state.draft.items.splice(i, 1); save(KEYS.draft, state.draft); renderSession(); break;
     case 'open-add':
-      openExercisePicker('Добавить в тренировку', name => {
+      openExercisePicker(L('Добавить в тренировку', 'Add to workout'), name => {
         const p = { ...E.prescribe(name, state.draft.phaseKey, state.workouts, state.settings, today()), trend: E.trend(name, state.workouts, today()) };
         state.draft.items.push(makeItem(p));
         save(KEYS.draft, state.draft);
         renderSession();
-        toast('Добавлено: ' + (mediaFor(name)?.title || name));
+        toast(L('Добавлено: ', 'Added: ') + (mediaFor(name)?.title || exName(name)));
         requestAnimationFrame(() => view.querySelectorAll('.card.tight')[state.draft.items.length]?.scrollIntoView({ block: 'center', behavior: 'smooth' }));
       });
       break;
     case 'cancel':
-      if (confirm('Отменить тренировку? Отмеченные подходы не сохранятся.')) {
+      if (confirm(L('Отменить тренировку? Отмеченные подходы не сохранятся.', 'Cancel the workout? Checked sets won\'t be saved.'))) {
         state.draft = null; save(KEYS.draft, null); stopTimer(); releaseWakeLock(); render();
       }
       break;
     case 'finish': finishSession(); break;
     case 'more-history': state.historyLimit += 30; renderHistory(); break;
     case 'del-workout':
-      if (confirm('Удалить эту тренировку из истории?')) {
+      if (confirm(L('Удалить эту тренировку из истории?', 'Delete this workout from history?'))) {
         state.workouts = state.workouts.filter(w => w.id !== b.dataset.id); persistWorkouts(); renderHistory();
       }
       break;
@@ -897,20 +928,21 @@ view.addEventListener('click', async e => {
       if (!(await enableWatchNotify())) return;
       state.settings.watchNotify = true; saveSettings();
       const cb = document.getElementById('watchNotify'); if (cb) cb.checked = true;
-      toast('Жди сигнал на часах через 5 секунд');
-      setTimeout(() => showNote('GymCoach: проверка часов', 'Если часы завибрировали — всё работает 💪').then(ok => { if (!ok) toast('Не получилось показать уведомление'); }), 5000);
+      toast(L('Жди сигнал на часах через 5 секунд', 'Wait for the alert on your watch in 5 seconds'));
+      setTimeout(() => showNote(L('GymCoach: проверка часов', 'GymCoach: watch test'), L('Если часы завибрировали — всё работает 💪', 'If your watch vibrated, everything works 💪')).then(ok => { if (!ok) toast(L('Не получилось показать уведомление', 'Could not show the notification')); }), 5000);
       break;
     }
+    case 'lang': if (b.dataset.lang !== LANG) setLang(b.dataset.lang); break;
     case 'backup-later':
       save('gc.backupSnooze', today()); renderToday(); break;
     case 'wipe':
-      if (confirm('Удалить ВСЕ тренировки и настройки с этого телефона? Это нельзя отменить.')) {
+      if (confirm(L('Удалить ВСЕ тренировки и настройки с этого телефона? Это нельзя отменить.', 'Delete ALL workouts and settings from this phone? This can\'t be undone.'))) {
         Object.values(KEYS).forEach(k => save(k, null)); location.reload();
       }
       break;
     case 'block-now':
       state.settings.blockStart = E.mondayOf(today()); state.settings.phaseOverride = null; saveSettings(); renderSettings();
-      toast('Новый блок начат с этой недели'); break;
+      toast(L('Новый блок начат с этой недели', 'A new block starts this week')); break;
     case 'tpl-del': state.templates[day].exercises.splice(i, 1); saveTemplates(); renderSettings(); break;
     case 'tpl-up': {
       if (i === 0) return;
@@ -918,20 +950,20 @@ view.addEventListener('click', async e => {
       [ex[i - 1], ex[i]] = [ex[i], ex[i - 1]]; saveTemplates(); renderSettings(); break;
     }
     case 'tpl-add':
-      openExercisePicker(`Добавить в ${E.WEEKDAYS[day]} · ${state.templates[day].title}`, name => {
+      openExercisePicker(`${L('Добавить в', 'Add to')} ${E.WEEKDAYS[day]} · ${dayTitle(state.templates[day].title)}`, name => {
         state.templates[day].exercises.push(name); saveTemplates(); renderSettings();
-        toast('Добавлено в программу');
+        toast(L('Добавлено в программу', 'Added to the program'));
       });
       break;
     case 'del-day':
-      if (confirm(`Удалить день ${E.WEEKDAYS[day]} из программы?`)) { delete state.templates[day]; saveTemplates(); renderSettings(); }
+      if (confirm(L(`Удалить день ${E.WEEKDAYS[day]} из программы?`, `Remove ${E.WEEKDAYS[day]} from the program?`))) { delete state.templates[day]; saveTemplates(); renderSettings(); }
       break;
     case 'add-day': {
       const d = document.getElementById('newDay').value;
       state.templates[d] = { title: 'Новая тренировка', exercises: [] }; saveTemplates(); renderSettings(); break;
     }
     case 'reset-tpl':
-      if (confirm('Вернуть программу по умолчанию? Твои правки дней пропадут.')) {
+      if (confirm(L('Вернуть программу по умолчанию? Твои правки дней пропадут.', 'Restore the default program? Your changes to the days will be lost.'))) {
         state.templates = structuredClone(E.DEFAULT_TEMPLATES); saveTemplates(); renderSettings();
       }
       break;
@@ -955,7 +987,7 @@ view.addEventListener('change', async e => {
   if (el.id === 'watchNotify') {
     if (el.checked && !(await enableWatchNotify())) { el.checked = false; return; }
     state.settings.watchNotify = el.checked; saveSettings();
-    toast(el.checked ? 'Сигнал на часы включён' : 'Сигнал на часы выключен');
+    toast(el.checked ? L('Сигнал на часы включён', 'Watch alert on') : L('Сигнал на часы выключен', 'Watch alert off'));
   }
   if (el.id === 'watchNotifyStart') { state.settings.watchNotifyStart = el.checked; saveSettings(); }
   if (el.id === 'bodyweight') { state.settings.bodyweight = +el.value || 72; saveSettings(); }
@@ -976,7 +1008,7 @@ document.getElementById('timer').addEventListener('click', e => {
     timer.end += +v * 1000;
     timer.total = Math.max(timer.total, (timer.end - Date.now()) / 1000);
     if (notifyEnabled() && state.settings.watchNotifyStart && !timer.buzzed) {
-      showNote(`Отдых — до ${clockText(timer.end)}`, `Дальше: ${timer.nextUp}`, { silent: true });
+      showNote(L(`Отдых — до ${clockText(timer.end)}`, `Rest — until ${clockText(timer.end)}`), `${L('Дальше', 'Next')}: ${timer.nextUp}`, { silent: true });
     }
     tickTimer();
   }
@@ -1017,20 +1049,20 @@ async function openMedia(name) {
   const m = mediaFor(name);
   if (!m) return openPicker(name);
   showModal(`
-    <div class="row between"><h3 style="margin:0">${esc(m.title)}</h3><button class="ghost small" data-m="close" aria-label="Закрыть">✕</button></div>
-    <div class="small muted" style="margin-bottom:8px">${esc(name)}</div>
+    <div class="row between"><h3 style="margin:0">${esc(m.title)}</h3><button class="ghost small" data-m="close" aria-label="${L('Закрыть', 'Close')}">✕</button></div>
+    <div class="small muted" style="margin-bottom:8px">${esc(exName(name))}</div>
     <div class="anim big"><img src="${esc(m.frames[0])}" alt=""><img class="f2" src="${esc(m.frames[1])}" alt=""></div>
-    <ol class="steps" id="mSteps"><li class="muted">Загружаю технику…</li></ol>
+    <ol class="steps" id="mSteps"><li class="muted">${L('Загружаю технику…', 'Loading technique…')}</li></ol>
     <div class="row" style="margin-top:10px">
-      <button class="small" data-m="pick" data-name="${esc(name)}">Сменить картинку</button>
+      <button class="small" data-m="pick" data-name="${esc(name)}">${L('Сменить картинку', 'Change picture')}</button>
     </div>
-    <p class="small muted" style="margin-bottom:0">Картинки и описание: free-exercise-db, общественное достояние.</p>`);
+    <p class="small muted" style="margin-bottom:0">${L('Картинки и описание: free-exercise-db, общественное достояние.', 'Pictures and instructions: free-exercise-db, public domain.')}</p>`);
   const { steps, lang } = await stepsFor(m.id);
   const el = document.getElementById('mSteps');
   if (!el) return;
   el.innerHTML = steps.length
-    ? steps.map(s => `<li>${esc(s)}</li>`).join('') + (lang === 'en' ? '<li class="muted small" style="list-style:none">Перевода пока нет, показываю оригинал.</li>' : '')
-    : '<li class="muted" style="list-style:none">Описание недоступно без интернета.</li>';
+    ? steps.map(s => `<li>${esc(s)}</li>`).join('') + (lang === 'en' && LANG !== 'en' ? '<li class="muted small" style="list-style:none">Перевода пока нет, показываю оригинал.</li>' : '')
+    : `<li class="muted" style="list-style:none">${L('Описание недоступно без интернета.', 'Instructions are not available offline.')}</li>`;
 }
 
 // ---------- выбор упражнения с картинками ----------
@@ -1060,10 +1092,10 @@ function openExercisePicker(title, cb) {
   addPicker.muscle = '';
   addPicker.q = '';
   showModal(`
-    <div class="row between"><h3 style="margin:0">${esc(title)}</h3><button class="ghost small" data-m="close" aria-label="Закрыть">✕</button></div>
-    <input id="pkSearch" type="search" placeholder="Поиск: жим, тяга, махи, bench…" style="width:100%;margin:10px 0 8px" autocomplete="off">
+    <div class="row between"><h3 style="margin:0">${esc(title)}</h3><button class="ghost small" data-m="close" aria-label="${L('Закрыть', 'Close')}">✕</button></div>
+    <input id="pkSearch" type="search" placeholder="${L('Поиск: жим, тяга, махи, bench…', 'Search: bench, row, curl, raise…')}" style="width:100%;margin:10px 0 8px" autocomplete="off">
     <div class="chips" id="pkChips">
-      <button class="chip on" data-m="flt" data-mu="">Все</button>
+      <button class="chip on" data-m="flt" data-mu="">${L('Все', 'All')}</button>
       ${MUSCLE_FILTERS.map(m => `<button class="chip" data-m="flt" data-mu="${m}">${E.MUSCLE_LABELS[m]}</button>`).join('')}
     </div>
     <div id="pkList"></div>`);
@@ -1086,12 +1118,12 @@ async function renderPickerList() {
 
   let html = '';
   if (mine.length) {
-    html += '<div class="pk-head">Твои упражнения</div>' + mine.map(x => {
-      const title = x.media?.title || x.name;
+    html += `<div class="pk-head">${L('Твои упражнения', 'Your exercises')}</div>` + mine.map(x => {
+      const title = x.media?.title || exName(x.name);
       const thumb = x.media
         ? `<span class="anim mini"><img src="${esc(x.media.frames[0])}" alt="" loading="lazy"><img class="f2" src="${esc(x.media.frames[1])}" alt="" loading="lazy"></span>`
         : '<span class="anim mini empty-anim">?</span>';
-      const sub = `${title !== x.name ? x.name + ' · ' : ''}${E.MUSCLE_LABELS[x.muscle]}${x.count ? ` · делал ${x.count} раз` : ''}`;
+      const sub = `${title !== exName(x.name) ? exName(x.name) + ' · ' : ''}${E.MUSCLE_LABELS[x.muscle]}${x.count ? ` · ${L(`делал ${x.count} раз`, `done ${x.count} times`)}` : ''}`;
       return pickRow(`data-m="add-pick" data-name="${esc(x.name)}"`, thumb, title, sub);
     }).join('');
   }
@@ -1104,20 +1136,20 @@ async function renderPickerList() {
       const have = new Set(mine.map(x => x.media?.id).filter(Boolean));
       more = more.filter(r => !have.has(r.id) && (!addPicker.muscle || DB_MUSCLE[r.muscle] === addPicker.muscle)).slice(0, 25);
       if (more.length) {
-        html += '<div class="pk-head">Ещё из базы (названия по-английски)</div>' + more.map(r => pickRow(
+        html += `<div class="pk-head">${L('Ещё из базы (названия по-английски)', 'More from the database')}</div>` + more.map(r => pickRow(
           `data-m="add-db" data-id="${esc(r.id)}" data-dbname="${esc(r.name)}"`,
           `<span class="anim mini"><img src="${esc(r.thumb)}" alt="" loading="lazy"></span>`,
           r.name, `${E.MUSCLE_LABELS[DB_MUSCLE[r.muscle] || 'other']} · ${r.equip}`,
         )).join('');
       }
     } else {
-      html += '<p class="muted small">Остальная база доступна только с интернетом.</p>';
+      html += `<p class="muted small">${L('Остальная база доступна только с интернетом.', 'The rest of the database needs internet.')}</p>`;
     }
-    html += `<button class="small ghost" data-m="add-custom" style="margin-top:8px">＋ Своё упражнение «${esc(addPicker.q.trim())}» (без картинки)</button>`;
+    html += `<button class="small ghost" data-m="add-custom" style="margin-top:8px">＋ ${L(`Своё упражнение «${esc(addPicker.q.trim())}» (без картинки)`, `Custom exercise "${esc(addPicker.q.trim())}" (no picture)`)}</button>`;
   }
   if (seq !== pickerSeq) return;
   const box = document.getElementById('pkList');
-  if (box) box.innerHTML = html || '<p class="muted small">Ничего не нашлось. Попробуй другое слово.</p>';
+  if (box) box.innerHTML = html || `<p class="muted small">${L('Ничего не нашлось. Попробуй другое слово.', 'Nothing found. Try another word.')}</p>`;
 }
 
 function finishPick(name) {
@@ -1131,11 +1163,11 @@ async function openPicker(name) {
   pickerFor = name;
   const words = name.toLowerCase().replace(/[·()]/g, ' ').replace(/\b(barbell|machine|cable|grip|single|arm)\b/g, ' ').replace(/\s+/g, ' ').trim();
   showModal(`
-    <div class="row between"><h3 style="margin:0">Картинка для упражнения</h3><button class="ghost small" data-m="close" aria-label="Закрыть">✕</button></div>
-    <div class="small muted" style="margin:4px 0 8px">${esc(name)}</div>
-    <input id="mSearch" type="search" placeholder="Поиск по-английски: bench, curl, row…" value="${esc(words)}" style="width:100%">
+    <div class="row between"><h3 style="margin:0">${L('Картинка для упражнения', 'Exercise picture')}</h3><button class="ghost small" data-m="close" aria-label="${L('Закрыть', 'Close')}">✕</button></div>
+    <div class="small muted" style="margin:4px 0 8px">${esc(exName(name))}</div>
+    <input id="mSearch" type="search" placeholder="${L('Поиск по-английски: bench, curl, row…', 'Search: bench, curl, row…')}" value="${esc(words)}" style="width:100%">
     <div id="mResults" class="results"></div>
-    ${mediaFor(name) ? `<button class="small ghost danger" data-m="unpick" style="margin-top:8px">Убрать свою картинку</button>` : ''}`);
+    ${mediaFor(name) ? `<button class="small ghost danger" data-m="unpick" style="margin-top:8px">${L('Убрать свою картинку', 'Remove my picture')}</button>` : ''}`);
   const inp = document.getElementById('mSearch');
   inp.addEventListener('input', () => runSearch(inp.value));
   runSearch(inp.value);
@@ -1149,10 +1181,10 @@ async function runSearch(q) {
   if (seq !== searchSeq) return;
   const box = document.getElementById('mResults');
   if (!box) return;
-  if (!res) { box.innerHTML = '<p class="muted small">Поиск не загрузился. Нужен интернет.</p>'; return; }
+  if (!res) { box.innerHTML = `<p class="muted small">${L('Поиск не загрузился. Нужен интернет.', 'Search didn\'t load. Internet is needed.')}</p>`; return; }
   box.innerHTML = res.length
     ? res.map(r => `<button class="result" data-m="choose" data-id="${esc(r.id)}"><img src="${esc(r.thumb)}" alt="" loading="lazy"><span><b>${esc(r.name)}</b><small class="muted">${esc(r.muscle)} · ${esc(r.equip)}</small></span></button>`).join('')
-    : '<p class="muted small">Ничего не нашлось. Попробуй другое слово.</p>';
+    : `<p class="muted small">${L('Ничего не нашлось. Попробуй другое слово.', 'Nothing found. Try another word.')}</p>`;
 }
 
 modal.addEventListener('click', e => {
@@ -1178,10 +1210,19 @@ modal.addEventListener('click', e => {
     setPick(pickerFor, a === 'choose' ? b.dataset.id : null);
     closeModal();
     render();
-    toast(a === 'choose' ? 'Картинка сохранена' : 'Картинка убрана');
+    toast(a === 'choose' ? L('Картинка сохранена', 'Picture saved') : L('Картинка убрана', 'Picture removed'));
   }
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+// подписи вкладок и таймера из index.html
+if (LANG === 'en') {
+  document.documentElement.lang = 'en';
+  const TABS = { today: 'Today', history: 'History', progress: 'Progress', analysis: 'Analysis', settings: 'Settings' };
+  document.querySelectorAll('#tabs button').forEach(b => { const t = b.lastChild; if (t?.nodeType === 3) t.textContent = TABS[b.dataset.tab]; });
+  const rl = document.querySelector('#timer .small.muted'); if (rl) rl.textContent = 'Rest';
+  const st = document.querySelector('[data-timer="stop"]'); if (st) st.textContent = 'Stop';
+}
 
 await initMedia();
 render();

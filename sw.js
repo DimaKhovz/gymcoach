@@ -1,6 +1,6 @@
 // Офлайн-кэш: приложение открывается в зале и без интернета.
-const CACHE = 'gymcoach-v6';
-const FILES = ['./', 'index.html', 'css/style.css', 'js/app.js', 'js/engine.js', 'js/parser.js', 'js/media.js',
+const CACHE = 'gymcoach-v7';
+const FILES = ['./', 'index.html', 'css/style.css', 'js/app.js', 'js/engine.js', 'js/parser.js', 'js/media.js', 'js/i18n.js',
   'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png',
   'data/mapping.json', 'data/instructions-en.json', 'data/instructions-ru.json', 'data/exdb-index.json'];
 

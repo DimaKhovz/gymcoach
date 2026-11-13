@@ -1,30 +1,32 @@
 // Расчёты: 1ПМ, фазы периодизации, план на день, плато, анализ.
 // Чистые функции без DOM, чтобы их можно было проверять в Node.
 
+import { L } from './i18n.js';
+
 export const DAY_MS = 86400000;
 
 export const PHASES = {
   volume: {
-    label: 'Объём', color: '#4fb3ff', load: 1,
-    desc: 'Много повторов, 2 в запасе. Набиваем объём и технику.',
+    label: L('Объём', 'Volume'), color: '#4fb3ff', load: 1,
+    desc: L('Много повторов, 2 в запасе. Набиваем объём и технику.', 'High reps, 2 in reserve. Building volume and technique.'),
     compound: { reps: [12, 15], sets: 3, rir: 2, rest: 120 },
     isolation: { reps: [15, 20], sets: 3, rir: 2, rest: 60 },
   },
   hypertrophy: {
-    label: 'Масса', color: '#3ddc84', load: 1,
-    desc: 'Средние повторы почти до отказа (1 в запасе). Главная неделя для роста.',
+    label: L('Масса', 'Hypertrophy'), color: '#3ddc84', load: 1,
+    desc: L('Средние повторы почти до отказа (1 в запасе). Главная неделя для роста.', 'Moderate reps close to failure (1 in reserve). The main week for growth.'),
     compound: { reps: [8, 12], sets: 4, rir: 1, rest: 150 },
     isolation: { reps: [10, 15], sets: 3, rir: 1, rest: 75 },
   },
   strength: {
-    label: 'Сила', color: '#ff9f43', load: 1,
-    desc: 'Тяжело и мало повторов в базе, 2 в запасе. Изоляция остаётся 10–12.',
+    label: L('Сила', 'Strength'), color: '#ff9f43', load: 1,
+    desc: L('Тяжело и мало повторов в базе, 2 в запасе. Изоляция остаётся 10–12.', 'Heavy, low reps on compounds, 2 in reserve. Isolation stays at 10–12.'),
     compound: { reps: [4, 6], sets: 4, rir: 2, rest: 180 },
     isolation: { reps: [10, 12], sets: 3, rir: 1, rest: 75 },
   },
   deload: {
-    label: 'Разгрузка', color: '#a29bfe', load: 0.85,
-    desc: 'Лёгкая неделя: вес ниже, 2 подхода, далеко от отказа. Восстанавливаемся.',
+    label: L('Разгрузка', 'Deload'), color: '#a29bfe', load: 0.85,
+    desc: L('Лёгкая неделя: вес ниже, 2 подхода, далеко от отказа. Восстанавливаемся.', 'Easy week: lighter weights, 2 sets, far from failure. Recovering.'),
     compound: { reps: [8, 10], sets: 2, rir: 3, rest: 120 },
     isolation: { reps: [12, 15], sets: 2, rir: 3, rest: 60 },
   },
@@ -32,7 +34,7 @@ export const PHASES = {
 
 export const DEFAULT_PHASE_ORDER = ['volume', 'hypertrophy', 'strength', 'deload'];
 
-export const WEEKDAYS = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+export const WEEKDAYS = L(['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'], ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
 
 // Сб и Вс — главные дни (зал пустой: турник, пояс с весом, штанги свободны).
 // Вт и Чт — утро, в зале людно: гантели, блоки и тренажёры, которые легко найти.
@@ -90,19 +92,22 @@ export function addDays(iso, n) {
 const CATALOG = {
   'Hyperextension': { kind: 'warmup', equip: 'bodyweight', muscle: 'other' },
   'Lateral Raise (техника) · Dumbbell': { kind: 'skill', equip: 'dumbbell', muscle: 'shoulders', base: 'Lateral Raise · Dumbbell',
-    note: 'Лёгкий вес, медленно. Веди локтем, а не кистью, плечо вниз, мизинец не задирай. Наверху пауза 1 секунду, вниз 2–3 секунды. Чувствуешь среднюю дельту — значит, правильно.' },
+    note: L('Лёгкий вес, медленно. Веди локтем, а не кистью, плечо вниз, мизинец не задирай. Наверху пауза 1 секунду, вниз 2–3 секунды. Чувствуешь среднюю дельту — значит, правильно.',
+      'Light weight, slowly. Lead with the elbow, not the hand, shoulder down, don\'t lift the pinky. Pause 1 second at the top, 2–3 seconds down. If you feel the side delt, you\'re doing it right.') },
   'Clean and Press · Barbell': { kind: 'compound', equip: 'barbell', muscle: 'shoulders', maxReps: 8,
-    note: 'Техническое упражнение: начни с пустого грифа (20 кг) и прибавляй, только если техника ровная. Спина прямая на подъёме с пола.' },
+    note: L('Техническое упражнение: начни с пустого грифа (20 кг) и прибавляй, только если техника ровная. Спина прямая на подъёме с пола.',
+      'Technical lift: start with the empty bar (20 kg) and add weight only if your form is solid. Keep your back straight when lifting from the floor.') },
   'Clean and Press · Dumbbell': { kind: 'compound', equip: 'dumbbell', muscle: 'shoulders', maxReps: 10,
-    note: 'Вариант с гантелями для людного зала.' },
+    note: L('Вариант с гантелями для людного зала.', 'Dumbbell version for a crowded gym.') },
   'Deadlift · Barbell': { kind: 'compound', equip: 'barbell', muscle: 'back', maxReps: 10,
-    note: 'Становая тяга: спина прямая, гриф вплотную к ногам. Работает и спина, и ноги, но без забитых квадрицепсов, как после приседа.' },
+    note: L('Становая тяга: спина прямая, гриф вплотную к ногам. Работает и спина, и ноги, но без забитых квадрицепсов, как после приседа.',
+      'Deadlift: straight back, bar close to your legs. Works back and legs without the quad fatigue you get from squats.') },
   'Glute Bridge · Barbell': { kind: 'compound', equip: 'barbell', muscle: 'legs',
-    note: 'Можно с поясом и блинами поперёк таза. Наверху сожми ягодицы на секунду.' },
+    note: L('Можно с поясом и блинами поперёк таза. Наверху сожми ягодицы на секунду.', 'Can be done with a belt and plates across the hips. Squeeze your glutes for a second at the top.') },
   'Wrist Curl · Barbell': { kind: 'isolation', equip: 'barbell', muscle: 'forearms' },
   'Reverse Wrist Curl · Dumbbell': { kind: 'isolation', equip: 'dumbbell', muscle: 'forearms' },
-  'Reverse Curl · Barbell': { kind: 'isolation', equip: 'barbell', muscle: 'forearms', note: 'Хват сверху: плечелучевая мышца и предплечья.' },
-  'Farmer Walk': { kind: 'isolation', equip: 'dumbbell', muscle: 'forearms', note: 'Тяжёлые гантели, 20–30 метров. Повторы = метры / 10.' },
+  'Reverse Curl · Barbell': { kind: 'isolation', equip: 'barbell', muscle: 'forearms', note: L('Хват сверху: плечелучевая мышца и предплечья.', 'Overhand grip: brachioradialis and forearms.') },
+  'Farmer Walk': { kind: 'isolation', equip: 'dumbbell', muscle: 'forearms', note: L('Тяжёлые гантели, 20–30 метров. Повторы = метры / 10.', 'Heavy dumbbells, 20–30 metres. Reps = metres / 10.') },
   'Hanging Knee Raise': { kind: 'isolation', equip: 'bodyweight', muscle: 'abs' },
   'Chest Dip': { kind: 'compound', equip: 'bodyweight', muscle: 'chest' },
   'Tricep Dip': { kind: 'compound', equip: 'bodyweight', muscle: 'triceps' },
@@ -128,10 +133,13 @@ export function muscleOf(name) {
   return 'other';
 }
 
-export const MUSCLE_LABELS = {
+export const MUSCLE_LABELS = L({
   chest: 'Грудь', back: 'Спина', shoulders: 'Плечи', biceps: 'Бицепс',
   triceps: 'Трицепс', forearms: 'Предплечья', legs: 'Ноги', abs: 'Пресс', other: 'Другое',
-};
+}, {
+  chest: 'Chest', back: 'Back', shoulders: 'Shoulders', biceps: 'Biceps',
+  triceps: 'Triceps', forearms: 'Forearms', legs: 'Legs', abs: 'Abs', other: 'Other',
+});
 
 export function exerciseMeta(name) {
   const base = CATALOG[name] || {};
@@ -394,29 +402,34 @@ export function adviceForToday({ plans, phaseInfo, workouts, today, settings }) 
   const { phase, key, weekInBlock, blockLen } = phaseInfo;
   if (phaseInfo.blockNo < 1) {
     const d = parseISO(phaseInfo.blockStart);
-    const month = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'][d.getMonth()];
-    tips.push(`Блок 1 начнётся в понедельник, ${d.getDate()} ${month}. Эту неделю работаешь как привык: «${phase.label}», ${phase.compound.reps[0]}–${phase.compound.reps[1]} повторов в базе.`);
+    const month = L(['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'],
+      ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'])[d.getMonth()];
+    tips.push(L(`Блок 1 начнётся в понедельник, ${d.getDate()} ${month}. Эту неделю работаешь как привык: «${phase.label}», ${phase.compound.reps[0]}–${phase.compound.reps[1]} повторов в базе.`,
+      `Block 1 starts on Monday, ${month} ${d.getDate()}. This week train as usual: "${phase.label}", ${phase.compound.reps[0]}–${phase.compound.reps[1]} reps on compounds.`));
   } else {
-    tips.push(`Неделя ${weekInBlock} из ${blockLen}: «${phase.label}». ${phase.desc}`);
+    tips.push(L(`Неделя ${weekInBlock} из ${blockLen}: «${phase.label}». ${phase.desc}`, `Week ${weekInBlock} of ${blockLen}: "${phase.label}". ${phase.desc}`));
   }
-  if (key === 'deload') tips.push('Не добивай подходы до отказа на этой неделе: вся польза разгрузки в том, чтобы отдохнуть.');
-  if (key === 'strength') tips.push('Хорошо разомнись: 2–3 подхода с растущим весом перед первым рабочим.');
+  if (key === 'deload') tips.push(L('Не добивай подходы до отказа на этой неделе: вся польза разгрузки в том, чтобы отдохнуть.', 'Don\'t take sets to failure this week: the whole point of a deload is to recover.'));
+  if (key === 'strength') tips.push(L('Хорошо разомнись: 2–3 подхода с растущим весом перед первым рабочим.', 'Warm up well: 2–3 sets with increasing weight before the first working set.'));
 
   const lastW = [...workouts].reverse().find(w => w.date < today);
   if (lastW) {
     const gap = daysBetween(lastW.date, today);
-    if (gap >= 6) tips.push(`Последняя тренировка была ${gap} дн. назад. Первые подходы делай чуть легче плана.`);
+    if (gap >= 6) tips.push(L(`Последняя тренировка была ${gap} дн. назад. Первые подходы делай чуть легче плана.`, `Your last workout was ${gap} days ago. Make the first sets a bit lighter than planned.`));
   }
 
   const plateaus = plans.filter(p => p.trend?.status === 'plateau').map(p => p.name);
   const downs = plans.filter(p => p.trend?.status === 'down').map(p => p.name);
-  if (plateaus.length) tips.push(`Плато больше месяца: ${plateaus.join(', ')}. Если так же будет и после этого блока, поменяй вариант упражнения (угол, хват, гантели вместо штанги).`);
-  if (downs.length) tips.push(`Падение силы: ${downs.join(', ')}. Проверь сон и еду: при наборе массы вес тела должен расти примерно на 0,25–0,5 кг в неделю.`);
+  if (plateaus.length) tips.push(L(`Плато больше месяца: ${plateaus.join(', ')}. Если так же будет и после этого блока, поменяй вариант упражнения (угол, хват, гантели вместо штанги).`,
+    `Plateau for over a month: ${plateaus.join(', ')}. If it stays the same after this block, change the variation (angle, grip, dumbbells instead of barbell).`));
+  if (downs.length) tips.push(L(`Падение силы: ${downs.join(', ')}. Проверь сон и еду: при наборе массы вес тела должен расти примерно на 0,25–0,5 кг в неделю.`,
+    `Strength is dropping: ${downs.join(', ')}. Check sleep and food: when bulking, bodyweight should go up about 0.25–0.5 kg per week.`));
 
   const recentCount = workouts.filter(w => w.date < today && daysBetween(w.date, today) <= 28).length;
   if (recentCount < 4) return tips;
   const vol = weeklySetsByMuscle(workouts, today, 4);
   const low = Object.entries(vol).filter(([m, v]) => v < 8 && m !== 'abs' && m !== 'forearms').map(([m]) => MUSCLE_LABELS[m].toLowerCase());
-  if (low.length) tips.push(`Мало подходов за последние 4 недели (меньше 8 в неделю): ${low.join(', ')}. Для массы нужно 10–20 рабочих подходов на мышцу в неделю.`);
+  if (low.length) tips.push(L(`Мало подходов за последние 4 недели (меньше 8 в неделю): ${low.join(', ')}. Для массы нужно 10–20 рабочих подходов на мышцу в неделю.`,
+    `Too few sets over the last 4 weeks (under 8 per week): ${low.join(', ')}. For muscle growth you need 10–20 working sets per muscle per week.`));
   return tips;
 }
