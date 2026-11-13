@@ -169,6 +169,7 @@ function renderToday() {
         <p class="muted small">В GymKeeper: Настройки → Экспорт → TXT. Потом выбери этот файл здесь. По истории приложение посчитает рабочие веса.</p>
         <button class="primary block" data-act="import-txt">Импортировать TXT из GymKeeper</button>
       </div>`}
+    ${backupReminder()}
     <div class="chips">${chips}</div>
     <div class="card">
       <div class="small muted">${when}</div>
@@ -192,6 +193,32 @@ function renderToday() {
     <button class="primary block" data-act="start" data-day="${dayKey}">Начать тренировку</button>
     <p class="small muted" style="margin-top:12px">Вес считается от твоего 1ПМ (лучшее из последних 3 тренировок, формула Эпли) под нужные повторы с запасом. Во время тренировки следующие подходы подстраиваются под то, как прошёл предыдущий.</p>
   `;
+}
+
+function backupStatusText() {
+  const age = backupAgeDays();
+  if (age == null) return '⚠️ Резервной копии ещё не было.';
+  const when = age === 0 ? 'сегодня' : age === 1 ? 'вчера' : `${age} дн. назад`;
+  return `${age > 7 ? '⚠️' : '✅'} Последняя копия: ${when}.`;
+}
+
+// Напоминаем, если есть что терять, а копии не было больше 7 дней (не чаще раза в день).
+function backupReminder() {
+  const own = state.workouts.filter(w => w.source === 'app').length;
+  if (!state.workouts.length) return '';
+  const age = backupAgeDays();
+  if (age != null && age <= 7) return '';
+  if (age == null && own === 0) return '';
+  if (load('gc.backupSnooze', null) === today()) return '';
+  return `
+    <div class="card backup-card">
+      <b>${age == null ? 'Сделай первую резервную копию' : `Копии не было ${age} дн.`}</b>
+      <p class="small muted" style="margin:4px 0 10px">Тренировки хранятся только на телефоне. Отправь копию себе в Telegram или на Google Диск: это одно нажатие.</p>
+      <div class="row">
+        <button class="primary small" data-act="share-backup">Поделиться копией</button>
+        <button class="ghost small" data-act="backup-later">Позже</button>
+      </div>
+    </div>`;
 }
 
 function startSession(dayKey) {
@@ -617,10 +644,12 @@ function renderSettings() {
 
     <div class="card">
       <h3>Данные</h3>
-      <p class="small muted">Всё хранится только на этом телефоне. Делай резервную копию раз в неделю-две.</p>
+      <p class="small muted">Всё хранится только на этом телефоне. Отправляй копию в Telegram «Избранное» или на Google Диск раз в неделю: тогда данные не пропадут даже при потере телефона.</p>
+      <p class="small" style="margin:0 0 10px">${backupStatusText()}</p>
       <div class="row" style="flex-direction:column;align-items:stretch">
+        <button class="primary" data-act="share-backup">Поделиться копией (Telegram, Google Диск…)</button>
+        <button data-act="export-json">Скачать копию в «Загрузки»</button>
         <button data-act="import-txt">Импортировать TXT из GymKeeper</button>
-        <button data-act="export-json">Скачать резервную копию (JSON)</button>
         <button data-act="import-json">Восстановить из резервной копии</button>
         <button class="danger" data-act="wipe">Удалить все данные</button>
       </div>
@@ -644,17 +673,56 @@ function importTxt(text) {
 
 function download(name, text) {
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
   a.download = name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-function exportJson() {
-  download(`gymcoach-${today()}.json`, JSON.stringify({
+const LAST_BACKUP_KEY = 'gc.lastBackup';
+
+function backupText() {
+  let media = {};
+  try { media = JSON.parse(localStorage.getItem('gc.media') || '{}'); } catch { /* пусто */ }
+  return JSON.stringify({
     app: 'gymcoach', version: 1, exportedAt: new Date().toISOString(),
-    workouts: state.workouts, settings: state.settings, templates: state.templates,
-  }));
+    workouts: state.workouts, settings: state.settings, templates: state.templates, media,
+  });
+}
+function backupName() { return `gymcoach-backup-${today()}.txt`; }
+
+function markBackup() {
+  save(LAST_BACKUP_KEY, new Date().toISOString());
+}
+function lastBackup() { return load(LAST_BACKUP_KEY, null); }
+function backupAgeDays() {
+  const b = lastBackup();
+  return b ? Math.floor((Date.now() - new Date(b).getTime()) / 86400000) : null;
+}
+
+function exportJson() {
+  download(backupName(), backupText());
+  markBackup();
+  toast('Копия сохранена в «Загрузки»');
+}
+
+// Меню Android «Поделиться»: копия уходит в Telegram «Избранное», Google Диск и т.п.
+// Файл .txt — Chrome на Android разрешает делиться текстовыми файлами, а .json — не везде.
+async function shareBackup() {
+  const file = new File([backupText()], backupName(), { type: 'text/plain' });
+  if (navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: 'GymCoach — резервная копия', text: `Резервная копия GymCoach от ${fmtDate(today())}` });
+      markBackup();
+      toast('Копия отправлена');
+      render();
+    } catch (e) {
+      if (e.name !== 'AbortError') toast('Не получилось поделиться: ' + e.message);
+    }
+  } else {
+    exportJson();
+    render();
+  }
 }
 
 function importJson(text) {
@@ -668,8 +736,10 @@ function importJson(text) {
   persistWorkouts();
   save(KEYS.settings, state.settings);
   save(KEYS.templates, state.templates);
+  if (data.media) save('gc.media', data.media);
+  markBackup();
   toast('Восстановлено');
-  render();
+  setTimeout(() => location.reload(), 800);
 }
 
 const fileTxt = document.getElementById('fileTxt');
@@ -739,7 +809,10 @@ view.addEventListener('click', e => {
       break;
     case 'import-txt': fileTxt.click(); break;
     case 'import-json': fileJson.click(); break;
-    case 'export-json': exportJson(); break;
+    case 'export-json': exportJson(); renderSettings(); break;
+    case 'share-backup': shareBackup(); break;
+    case 'backup-later':
+      save('gc.backupSnooze', today()); renderToday(); break;
     case 'wipe':
       if (confirm('Удалить ВСЕ тренировки и настройки с этого телефона? Это нельзя отменить.')) {
         Object.values(KEYS).forEach(k => save(k, null)); location.reload();

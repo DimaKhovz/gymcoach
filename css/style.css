@@ -253,3 +253,5 @@ body.modal-open { overflow: hidden; }
 .result.pick span b { font-weight: 600; }
 .result.pick small { font-size: 12px; }
 #pkChips { position: sticky; top: -16px; background: var(--card); padding-top: 4px; z-index: 1; }
+
+.backup-card { border-color: rgba(255, 159, 67, .55); background: linear-gradient(0deg, rgba(255, 159, 67, .06), rgba(255, 159, 67, .06)), var(--card); }
