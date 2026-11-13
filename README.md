@@ -5,7 +5,9 @@
 - `js/parser.js` — импорт TXT-экспорта GymKeeper и склейка дублей названий.
 - `js/engine.js` — 1ПМ (Эпли), фазы блока, план на день, тренды, анализ. Без DOM, проверяется в Node.
 - `js/app.js` — интерфейс. Данные хранятся в localStorage телефона.
-- `sw.js`, `manifest.webmanifest` — офлайн-режим и установка на экран.
+- `js/media.js` — анимации упражнений: два кадра (начало и конец движения) плавно сменяют друг друга.
+- `img/ex`, `data/` — кадры и техника из [free-exercise-db](https://github.com/yuhonas/free-exercise-db) (Unlicense, общественное достояние). Пересобрать: `python tools/build_media.py`. Соответствие названий дневника и базы — словарь `MAPPING` в этом скрипте.
+- `sw.js`, `manifest.webmanifest` — офлайн-режим (включая все встроенные кадры) и установка на экран.
 
 Проверка: `node tests/check.mjs путь/к/diary.txt`
 Локальный запуск: `python -m http.server 8765` в этой папке, затем http://localhost:8765

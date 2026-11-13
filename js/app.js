@@ -1,5 +1,6 @@
 import { parseGymKeeperTxt, normalizeName } from './parser.js';
 import * as E from './engine.js';
+import { initMedia, mediaFor, stepsFor, setPick, searchDb } from './media.js';
 
 // ---------- хранилище ----------
 
@@ -49,6 +50,12 @@ function persistWorkouts() {
 
 const view = document.getElementById('view');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function animThumb(name, cls = '') {
+  const m = mediaFor(name);
+  if (!m) return `<button class="anim empty-anim ${cls}" data-act="pick-media" data-name="${esc(name)}" aria-label="Выбрать картинку">＋<small>картинка</small></button>`;
+  return `<button class="anim ${cls}" data-act="media" data-name="${esc(name)}" aria-label="Техника: ${esc(name)}">
+    <img src="${esc(m.frames[0])}" alt="" loading="lazy"><img class="f2" src="${esc(m.frames[1])}" alt="" loading="lazy"></button>`;
+}
 const fmtW = w => (w == null ? '—' : E.fmtW(w));
 const pct = x => (x > 0 ? '+' : '') + (x * 100).toFixed(1) + '%';
 const MONTHS_RU = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
@@ -164,8 +171,11 @@ function renderToday() {
     ${plans.map(p => `
       <div class="card tight">
         <div class="ex-head">
-          <div class="ex-name">${esc(p.name)}</div>
-          ${p.warmup ? '' : trendBadge(p.trend, p.e1rm)}
+          ${animThumb(p.name)}
+          <div class="grow">
+            <div class="ex-name">${esc(p.name)}</div>
+            ${p.warmup ? '' : trendBadge(p.trend, p.e1rm)}
+          </div>
         </div>
         <div class="target">${targetText(p)}</div>
         <div class="small muted">${p.last ? `Прошлый раз (${fmtDate(p.last.date, false)}): ${esc(E.formatSets(p.last.sets))}` : 'Ещё не делал'}
@@ -251,7 +261,8 @@ function renderItem(it, i) {
   return `
     <div class="card tight">
       <div class="ex-head">
-        <div class="ex-name">${esc(it.name)}</div>
+        ${animThumb(it.name)}
+        <div class="ex-name grow">${esc(it.name)}</div>
         <button class="ghost small" data-act="remove-ex" data-i="${i}" aria-label="Убрать упражнение">✕</button>
       </div>
       <div class="target">${targetText(p)}</div>
@@ -693,6 +704,8 @@ view.addEventListener('click', e => {
   if (b.classList.contains('chip') && day != null) { state.pickDay = +day; renderToday(); return; }
 
   switch (act) {
+    case 'media': openMedia(b.dataset.name); break;
+    case 'pick-media': openPicker(b.dataset.name); break;
     case 'start': startSession(+day); break;
     case 'toggle-set': toggleSet(i, +b.dataset.j); break;
     case 'add-set': {
@@ -808,6 +821,89 @@ function render() {
   ({ today: renderToday, history: renderHistory, progress: renderProgress, analysis: renderAnalysis, settings: renderSettings })[state.tab]();
 }
 
+// ---------- окно техники и выбор картинки ----------
+
+const modal = document.createElement('div');
+modal.className = 'modal hidden';
+document.body.appendChild(modal);
+
+function closeModal() {
+  modal.classList.add('hidden');
+  modal.innerHTML = '';
+  document.body.classList.remove('modal-open');
+}
+function showModal(html) {
+  modal.innerHTML = `<div class="sheet" role="dialog" aria-modal="true">${html}</div>`;
+  modal.classList.remove('hidden');
+  document.body.classList.add('modal-open');
+}
+
+async function openMedia(name) {
+  const m = mediaFor(name);
+  if (!m) return openPicker(name);
+  showModal(`
+    <div class="row between"><h3 style="margin:0">${esc(m.title)}</h3><button class="ghost small" data-m="close" aria-label="Закрыть">✕</button></div>
+    <div class="small muted" style="margin-bottom:8px">${esc(name)}</div>
+    <div class="anim big"><img src="${esc(m.frames[0])}" alt=""><img class="f2" src="${esc(m.frames[1])}" alt=""></div>
+    <ol class="steps" id="mSteps"><li class="muted">Загружаю технику…</li></ol>
+    <div class="row" style="margin-top:10px">
+      <button class="small" data-m="pick" data-name="${esc(name)}">Сменить картинку</button>
+    </div>
+    <p class="small muted" style="margin-bottom:0">Картинки и описание: free-exercise-db, общественное достояние.</p>`);
+  const { steps, lang } = await stepsFor(m.id);
+  const el = document.getElementById('mSteps');
+  if (!el) return;
+  el.innerHTML = steps.length
+    ? steps.map(s => `<li>${esc(s)}</li>`).join('') + (lang === 'en' ? '<li class="muted small" style="list-style:none">Перевода пока нет, показываю оригинал.</li>' : '')
+    : '<li class="muted" style="list-style:none">Описание недоступно без интернета.</li>';
+}
+
+let pickerFor = null;
+async function openPicker(name) {
+  pickerFor = name;
+  const words = name.toLowerCase().replace(/[·()]/g, ' ').replace(/\b(barbell|machine|cable|grip|single|arm)\b/g, ' ').replace(/\s+/g, ' ').trim();
+  showModal(`
+    <div class="row between"><h3 style="margin:0">Картинка для упражнения</h3><button class="ghost small" data-m="close" aria-label="Закрыть">✕</button></div>
+    <div class="small muted" style="margin:4px 0 8px">${esc(name)}</div>
+    <input id="mSearch" type="search" placeholder="Поиск по-английски: bench, curl, row…" value="${esc(words)}" style="width:100%">
+    <div id="mResults" class="results"></div>
+    ${mediaFor(name) ? `<button class="small ghost danger" data-m="unpick" style="margin-top:8px">Убрать свою картинку</button>` : ''}`);
+  const inp = document.getElementById('mSearch');
+  inp.addEventListener('input', () => runSearch(inp.value));
+  runSearch(inp.value);
+}
+
+let searchSeq = 0;
+async function runSearch(q) {
+  const seq = ++searchSeq;
+  let res;
+  try { res = await searchDb(q); } catch { res = null; }
+  if (seq !== searchSeq) return;
+  const box = document.getElementById('mResults');
+  if (!box) return;
+  if (!res) { box.innerHTML = '<p class="muted small">Поиск не загрузился. Нужен интернет.</p>'; return; }
+  box.innerHTML = res.length
+    ? res.map(r => `<button class="result" data-m="choose" data-id="${esc(r.id)}"><img src="${esc(r.thumb)}" alt="" loading="lazy"><span><b>${esc(r.name)}</b><small class="muted">${esc(r.muscle)} · ${esc(r.equip)}</small></span></button>`).join('')
+    : '<p class="muted small">Ничего не нашлось. Попробуй другое слово.</p>';
+}
+
+modal.addEventListener('click', e => {
+  if (e.target === modal) return closeModal();
+  const b = e.target.closest('[data-m]');
+  if (!b) return;
+  const a = b.dataset.m;
+  if (a === 'close') closeModal();
+  if (a === 'pick') openPicker(b.dataset.name);
+  if (a === 'choose' || a === 'unpick') {
+    setPick(pickerFor, a === 'choose' ? b.dataset.id : null);
+    closeModal();
+    render();
+    toast(a === 'choose' ? 'Картинка сохранена' : 'Картинка убрана');
+  }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+await initMedia();
 render();
 if (state.draft) requestWakeLock();
 
