@@ -34,20 +34,25 @@ export const DEFAULT_PHASE_ORDER = ['volume', 'hypertrophy', 'strength', 'deload
 
 export const WEEKDAYS = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 
+// Сб и Вс — главные дни (зал пустой: турник, пояс с весом, штанги свободны).
+// Вт и Чт — утро, в зале людно: гантели, блоки и тренажёры, которые легко найти.
+// Махи в стороны есть в каждой тренировке; ноги — минимум, чтобы оставались силы на велосипед.
 export const DEFAULT_TEMPLATES = {
-  6: { title: 'Грудь + трицепс', exercises: [
-    'Hyperextension', 'Incline Bench Press · Dumbbell', 'Incline Bench Press · Barbell', 'Chest Dip',
-    'Chest Fly · Machine', 'Tricep Extension · Cable', 'Seated Overhead Tricep Extension · Dumbbell'] },
-  0: { title: 'Спина + бицепс', exercises: [
-    'Hyperextension', 'Pull Up (Wide Grip)', 'Bent Over Row · Barbell', 'Lat Pull Down · Machine',
-    'Single Arm Bent Over Row · Dumbbell', 'Curl · Barbell', 'Incline Curl · Dumbbell'] },
-  2: { title: 'Ноги + пресс', exercises: [
-    'Squat · Barbell', 'Romanian Deadlift · Barbell', 'Glute Bridge · Barbell',
-    'Standing Calf Raise · Machine', 'Face Pull · Cable', 'Hanging Knee Raise'] },
-  4: { title: 'Плечи + верх', exercises: [
-    'Hyperextension', 'Overhead Press · Barbell', 'Bench Press · Barbell', 'Lateral Raise · Dumbbell',
-    'Lateral Raise · Cable', 'Face Pull · Cable', 'Pull Up (Close Grip)'] },
+  6: { title: 'Спина + бицепс + предплечья', exercises: [
+    'Hyperextension', 'Pull Up (Wide Grip)', 'Deadlift · Barbell', 'Chin Up', 'Bent Over Row · Barbell',
+    'Curl · Barbell', 'Reverse Curl · Barbell', 'Lateral Raise (техника) · Dumbbell'] },
+  0: { title: 'Грудь + трицепс + плечи', exercises: [
+    'Hyperextension', 'Incline Bench Press · Dumbbell', 'Chest Dip', 'Bench Press · Barbell',
+    'Chest Fly · Machine', 'Tricep Extension · Cable', 'Lateral Raise · Dumbbell'] },
+  2: { title: 'Плечи + руки + ягодицы', exercises: [
+    'Clean and Press · Barbell', 'Seated Overhead Press · Dumbbell', 'Glute Bridge · Barbell',
+    'Lateral Raise · Cable', 'Face Pull · Cable', 'Hammer Curl · Dumbbell',
+    'Overhead Tricep Extension · Cable', 'Standing Calf Raise · Machine'] },
+  4: { title: 'Верх на тренажёрах', exercises: [
+    'Lat Pull Down · Machine', 'Hammer Strength Press · Machine', 'Seated Row · Cable',
+    'Lateral Raise (техника) · Dumbbell', 'Reverse Fly · Machine', 'Wrist Curl · Barbell', 'Hanging Knee Raise'] },
 };
+export const PROGRAM_VERSION = 2;
 
 export const DEFAULT_SETTINGS = {
   bodyweight: 72,
@@ -84,6 +89,20 @@ export function addDays(iso, n) {
 
 const CATALOG = {
   'Hyperextension': { kind: 'warmup', equip: 'bodyweight', muscle: 'other' },
+  'Lateral Raise (техника) · Dumbbell': { kind: 'skill', equip: 'dumbbell', muscle: 'shoulders', base: 'Lateral Raise · Dumbbell',
+    note: 'Лёгкий вес, медленно. Веди локтем, а не кистью, плечо вниз, мизинец не задирай. Наверху пауза 1 секунду, вниз 2–3 секунды. Чувствуешь среднюю дельту — значит, правильно.' },
+  'Clean and Press · Barbell': { kind: 'compound', equip: 'barbell', muscle: 'shoulders', maxReps: 8,
+    note: 'Техническое упражнение: начни с пустого грифа (20 кг) и прибавляй, только если техника ровная. Спина прямая на подъёме с пола.' },
+  'Clean and Press · Dumbbell': { kind: 'compound', equip: 'dumbbell', muscle: 'shoulders', maxReps: 10,
+    note: 'Вариант с гантелями для людного зала.' },
+  'Deadlift · Barbell': { kind: 'compound', equip: 'barbell', muscle: 'back', maxReps: 10,
+    note: 'Становая тяга: спина прямая, гриф вплотную к ногам. Работает и спина, и ноги, но без забитых квадрицепсов, как после приседа.' },
+  'Glute Bridge · Barbell': { kind: 'compound', equip: 'barbell', muscle: 'legs',
+    note: 'Можно с поясом и блинами поперёк таза. Наверху сожми ягодицы на секунду.' },
+  'Wrist Curl · Barbell': { kind: 'isolation', equip: 'barbell', muscle: 'forearms' },
+  'Reverse Wrist Curl · Dumbbell': { kind: 'isolation', equip: 'dumbbell', muscle: 'forearms' },
+  'Reverse Curl · Barbell': { kind: 'isolation', equip: 'barbell', muscle: 'forearms', note: 'Хват сверху: плечелучевая мышца и предплечья.' },
+  'Farmer Walk': { kind: 'isolation', equip: 'dumbbell', muscle: 'forearms', note: 'Тяжёлые гантели, 20–30 метров. Повторы = метры / 10.' },
   'Hanging Knee Raise': { kind: 'isolation', equip: 'bodyweight', muscle: 'abs' },
   'Chest Dip': { kind: 'compound', equip: 'bodyweight', muscle: 'chest' },
   'Tricep Dip': { kind: 'compound', equip: 'bodyweight', muscle: 'triceps' },
@@ -98,6 +117,7 @@ export function muscleOf(name) {
   const n = name.toLowerCase();
   if (CATALOG[name]) return CATALOG[name].muscle;
   if (/hyperext|giper/.test(n)) return 'other';
+  if (/wrist|forearm|farmer|предплеч/.test(n)) return 'forearms';
   if (/crunch|sit up|knee raise|leg raise|plank|пресс|torso/.test(n)) return 'abs';
   if (/tricep|kickback|skull|трицепс/.test(n)) return 'triceps';
   if (/squat|lunge|leg|calf|glute|hip thrust|deadlift|икр|выпад|ног|butt/.test(n)) return 'legs';
@@ -110,7 +130,7 @@ export function muscleOf(name) {
 
 export const MUSCLE_LABELS = {
   chest: 'Грудь', back: 'Спина', shoulders: 'Плечи', biceps: 'Бицепс',
-  triceps: 'Трицепс', legs: 'Ноги', abs: 'Пресс', other: 'Другое',
+  triceps: 'Трицепс', forearms: 'Предплечья', legs: 'Ноги', abs: 'Пресс', other: 'Другое',
 };
 
 export function exerciseMeta(name) {
@@ -127,7 +147,7 @@ export function exerciseMeta(name) {
   }
   const kind = base.kind || (COMPOUND_RE.test(n) && !/curl|raise|fly|extension|kickback/.test(n) ? 'compound' : 'isolation');
   const step = { barbell: 2.5, dumbbell: 2, cable: 5, machine: 5, bodyweight: 2.5, other: 2.5 }[equip];
-  return { name, kind, equip, step, muscle: base.muscle || muscleOf(name) };
+  return { name, kind, equip, step, muscle: base.muscle || muscleOf(name), note: base.note || '', maxReps: base.maxReps || null, base: base.base || null };
 }
 
 // ---------- 1ПМ и история ----------
@@ -166,7 +186,13 @@ export function sessionsFor(name, workouts, { maxReps = 20 } = {}) {
 export function currentE1rm(name, workouts, today) {
   const ss = sessionsFor(name, workouts).filter(s => s.best > 0 && s.date <= today);
   if (!ss.length) return null;
-  const last = ss.slice(-3);
+  // только свежие тренировки: старые рекорды годичной давности завышают рабочий вес
+  const fresh = ss.filter(s => daysBetween(s.date, today) <= 120);
+  if (!fresh.length) {
+    const lastOld = ss[ss.length - 1];
+    return lastOld.best * (daysBetween(lastOld.date, today) > 365 ? 0.85 : 0.93);
+  }
+  const last = fresh.slice(-3);
   let v = Math.max(...last.map(s => s.best));
   // если последние тренировки были лёгкими, не опускаемся ниже 90% от лучшего за 3 месяца
   const best90 = Math.max(0, ...ss.filter(s => daysBetween(s.date, today) <= 90).map(s => s.best));
@@ -200,7 +226,7 @@ export function phaseFor(iso, settings) {
   const idx = ((weeks % len) + len) % len;
   let key = order[idx];
   if (settings.phaseOverride && settings.phaseOverride.week === week) key = settings.phaseOverride.key;
-  return { key, phase: PHASES[key], weekInBlock: idx + 1, blockLen: len, blockNo: Math.floor(weeks / len) + 1, weekStart: week };
+  return { key, phase: PHASES[key], weekInBlock: idx + 1, blockLen: len, blockNo: Math.floor(weeks / len) + 1, weekStart: week, blockStart: start };
 }
 
 export function roundWeight(w, meta, settings) {
@@ -226,7 +252,18 @@ export function prescribe(name, phaseKey, workouts, settings, today) {
     const lw = last?.sets?.[0]?.w ?? settings.bodyweight;
     return { name, meta, sets: 2, reps: [15, 25], targetReps: 20, rir: 3, rest: 60, weight: lw, e1rm: null, last, warmup: true };
   }
-  const z = meta.kind === 'compound' ? ph.compound : ph.isolation;
+  if (meta.kind === 'skill') {
+    // 40% от рабочего 1ПМ махов: вес, на котором можно думать о мышце, а не о весе
+    const be = currentE1rm(meta.base || name, workouts, today) || currentE1rm(name, workouts, today);
+    const weight = be ? Math.max(meta.step, roundWeight(be * 0.4, meta, settings)) : null;
+    return { name, meta, sets: 3, reps: [15, 20], targetReps: 15, rir: 4, rest: 45, weight, e1rm: null, last, skill: true, load: 1 };
+  }
+  let z = meta.kind === 'compound' ? ph.compound : ph.isolation;
+  if (meta.maxReps && z.reps[1] > meta.maxReps) {
+    // становая и взятие с пола — не на 15 повторов: техника разваливается раньше мышц
+    const hi = meta.maxReps;
+    z = { ...z, reps: [Math.max(3, Math.min(z.reps[0], hi - 2)), hi] };
+  }
   const targetReps = Math.round((z.reps[0] + z.reps[1]) / 2);
   const e = currentE1rm(name, workouts, today);
   let weight = null;
@@ -355,7 +392,13 @@ export function frequencyStats(workouts, today, weeks = 12) {
 export function adviceForToday({ plans, phaseInfo, workouts, today, settings }) {
   const tips = [];
   const { phase, key, weekInBlock, blockLen } = phaseInfo;
-  tips.push(`Неделя ${weekInBlock} из ${blockLen}: «${phase.label}». ${phase.desc}`);
+  if (phaseInfo.blockNo < 1) {
+    const d = parseISO(phaseInfo.blockStart);
+    const month = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'][d.getMonth()];
+    tips.push(`Блок 1 начнётся в понедельник, ${d.getDate()} ${month}. Эту неделю работаешь как привык: «${phase.label}», ${phase.compound.reps[0]}–${phase.compound.reps[1]} повторов в базе.`);
+  } else {
+    tips.push(`Неделя ${weekInBlock} из ${blockLen}: «${phase.label}». ${phase.desc}`);
+  }
   if (key === 'deload') tips.push('Не добивай подходы до отказа на этой неделе: вся польза разгрузки в том, чтобы отдохнуть.');
   if (key === 'strength') tips.push('Хорошо разомнись: 2–3 подхода с растущим весом перед первым рабочим.');
 
@@ -373,7 +416,7 @@ export function adviceForToday({ plans, phaseInfo, workouts, today, settings }) 
   const recentCount = workouts.filter(w => w.date < today && daysBetween(w.date, today) <= 28).length;
   if (recentCount < 4) return tips;
   const vol = weeklySetsByMuscle(workouts, today, 4);
-  const low = Object.entries(vol).filter(([m, v]) => v < 8 && m !== 'abs').map(([m]) => MUSCLE_LABELS[m].toLowerCase());
+  const low = Object.entries(vol).filter(([m, v]) => v < 8 && m !== 'abs' && m !== 'forearms').map(([m]) => MUSCLE_LABELS[m].toLowerCase());
   if (low.length) tips.push(`Мало подходов за последние 4 недели (меньше 8 в неделю): ${low.join(', ')}. Для массы нужно 10–20 рабочих подходов на мышцу в неделю.`);
   return tips;
 }

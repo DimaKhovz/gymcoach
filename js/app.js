@@ -39,6 +39,18 @@ if (!state.settings.blockStart) {
   state.settings.blockStart = E.mondayOf(today());
   save(KEYS.settings, state.settings);
 }
+if ((state.settings.programVersion || 1) < E.PROGRAM_VERSION) {
+  // новая программа под график Вт/Чт/Сб/Вс; свои правки дней (если были) не трогаем
+  const hasOwnApp = state.workouts.some(w => w.source === 'app');
+  if (!hasOwnApp && state.settings.blockStart >= E.mondayOf(today())) {
+    // эту неделю доделываем как привык, блок 1 — с понедельника
+    const thisWeek = E.mondayOf(today());
+    state.settings.blockStart = E.addDays(thisWeek, 7);
+    state.settings.phaseOverride = { week: thisWeek, key: 'hypertrophy' };
+  }
+  state.settings.programVersion = E.PROGRAM_VERSION;
+  save(KEYS.settings, state.settings);
+}
 if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
 
 function persistWorkouts() {
@@ -97,8 +109,9 @@ function trendBadge(t, e) {
 
 function renderPhasePill() {
   const p = E.phaseFor(today(), state.settings);
-  document.getElementById('phasePill').innerHTML =
-    `<span class="dot" style="background:${p.phase.color}"></span>Блок ${p.blockNo} · ${p.weekInBlock}/${p.blockLen} · ${p.phase.label}`;
+  document.getElementById('phasePill').innerHTML = p.blockNo < 1
+    ? `<span class="dot" style="background:${p.phase.color}"></span>До старта блока · ${p.phase.label}`
+    : `<span class="dot" style="background:${p.phase.color}"></span>Блок ${p.blockNo} · ${p.weekInBlock}/${p.blockLen} · ${p.phase.label}`;
 }
 
 // ---------- СЕГОДНЯ ----------
@@ -126,6 +139,7 @@ function planFor(dayKey) {
 
 function targetText(p) {
   if (p.warmup) return `Разминка: <b>${p.sets} × ${p.reps[0]}–${p.reps[1]}</b>, без отказа`;
+  if (p.skill) return `Техника: <b>${p.sets} × ${p.reps[0]}–${p.reps[1]}</b> · <b>${p.weight == null ? 'лёгкий вес' : fmtW(p.weight) + ' кг'}</b> · далеко от отказа · отдых ${fmtSec(p.rest)}`;
   const reps = `${p.reps[0]}–${p.reps[1]}`;
   let w;
   if (p.weight == null) w = 'вес подбери сам';
@@ -178,6 +192,7 @@ function renderToday() {
           </div>
         </div>
         <div class="target">${targetText(p)}</div>
+        ${p.meta.note ? `<div class="note small">${esc(p.meta.note)}</div>` : ''}
         <div class="small muted">${p.last ? `Прошлый раз (${fmtDate(p.last.date, false)}): ${esc(E.formatSets(p.last.sets))}` : 'Ещё не делал'}
         ${p.e1rm ? ` · 1ПМ ≈ ${Math.round(p.e1rm)} кг` : ''}</div>
       </div>`).join('')}
@@ -266,6 +281,7 @@ function renderItem(it, i) {
         <button class="ghost small" data-act="remove-ex" data-i="${i}" aria-label="Убрать упражнение">✕</button>
       </div>
       <div class="target">${targetText(p)}</div>
+      ${p.meta.note ? `<div class="note small">${esc(p.meta.note)}</div>` : ''}
       ${it.lastText ? `<div class="small muted">Прошлый раз ${esc(it.lastText)}</div>` : ''}
       <table class="sets">
         <thead><tr><th></th><th>${isBw ? 'Вес с телом' : 'Вес'}</th><th>Повт.</th><th>В запасе</th><th></th></tr></thead>
@@ -282,7 +298,7 @@ function toggleSet(i, j) {
   const it = state.draft.items[i];
   const s = it.sets[j];
   s.done = !s.done;
-  if (s.done && s.w && s.r && !it.plan.warmup) {
+  if (s.done && s.w && s.r && !it.plan.warmup && !it.plan.skill) {
     // подстраиваем следующие невыполненные подходы, которые ты не правил руками
     const next = E.adjustedWeight(it.plan, { w: +s.w, r: +s.r, rir: +s.rir }, state.settings);
     for (const n of it.sets.slice(j + 1)) {

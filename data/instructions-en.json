@@ -194,6 +194,22 @@
    "Repeat this motion for the prescribed amount of repetitions."
   ]
  },
+ "Clean_and_Press": {
+  "file": "f62bcf02",
+  "name": "Clean and Press",
+  "muscles": [
+   "shoulders"
+  ],
+  "steps": [
+   "Assume a shoulder-width stance, with knees inside the arms. Now while keeping the back flat, bend at the knees and hips so that you can grab the bar with the arms fully extended and a pronated grip that is slightly wider than shoulder width. Point the elbows out to sides. The bar should be close to the shins. Position the shoulders over or slightly ahead of the bar. Establish a flat back posture. This will be your starting position.",
+   "Begin to pull the bar by extending the knees. Move your hips forward and raise the shoulders at the same rate while keeping the angle of the back constant; continue to lift the bar straight up while keeping it close to your body.",
+   "As the bar passes the knee, extend at the ankles, knees, and hips forcefully, similar to a jumping motion. As you do so, continue to guide the bar with your hands, shrugging your shoulders and using the momentum from your movement to pull the bar as high as possible. The bar should travel close to your body, and you should keep your elbows out.",
+   "At maximum elevation, your feet should clear the floor and you should start to pull yourself under the bar. The mechanics of this could change slightly, depending on the weight used. You should descend into a squatting position as you pull yourself under the bar.",
+   "As the bar hits terminal height, rotate your elbows around and under the bar. Rack the bar across the front of the shoulders while keeping the torso erect and flexing the hips and knees to absorb the weight of the bar.",
+   "Stand to full height, holding the bar in the clean position.",
+   "Without moving your feet, press the bar overhead as you exhale. Lower the bar under control ."
+  ]
+ },
  "Close-Grip_Barbell_Bench_Press": {
   "file": "5e7221cd",
   "name": "Close-Grip Barbell Bench Press",
@@ -348,6 +364,20 @@
    "Repeat for the recommended amount of repetitions."
   ]
  },
+ "Dumbbell_Clean": {
+  "file": "d627d101",
+  "name": "Dumbbell Clean",
+  "muscles": [
+   "hamstrings"
+  ],
+  "steps": [
+   "Begin standing with a dumbbell in each hand with your feet shoulder width apart.",
+   "Lower the weights to the floor by flexing at the hips and knees, pushing your hips back until the dumbbells reach the floor. This will be your starting position.",
+   "To initiate the movement, violently jump upward by extending the hips, knees, and ankles to acclerate the weights upward. Maintaining a neutral grip on the dumbbells, keep the arms straight until full extension is reached.",
+   "After full extension, rebend the hips and knees to receive the weight in a squat position. Allow the arms to bend, guiding the dumbbells to your shoulders.",
+   "Upon receiving the weight in the squat position, extend the hips and knees to finish in a standing position with the weights on your shoulders."
+  ]
+ },
  "Dumbbell_Lunges": {
   "file": "74ab2c5e",
   "name": "Dumbbell Lunges",
@@ -411,6 +441,18 @@
   ],
   "steps": [
    "Facing a high pulley with a rope or dual handles attached, pull the weight directly towards your face, separating your hands as you do so. Keep your upper arms parallel to the ground."
+  ]
+ },
+ "Farmers_Walk": {
+  "file": "dbff555b",
+  "name": "Farmer's Walk",
+  "muscles": [
+   "forearms"
+  ],
+  "steps": [
+   "There are various implements that can be used for the farmers walk. These can also be performed with heavy dumbbells or short bars if these implements aren't available. Begin by standing between the implements.",
+   "After gripping the handles, lift them up by driving through your heels, keeping your back straight and your head up.",
+   "Walk taking short, quick steps, and don't forget to breathe. Move for a given distance, typically 50-100 feet, as fast as possible."
   ]
  },
  "Front_Barbell_Squat": {
@@ -774,6 +816,22 @@
    "Repeat for the recommended amount of repetitions."
   ]
  },
+ "Seated_Dumbbell_Palms-Down_Wrist_Curl": {
+  "file": "ad0748aa",
+  "name": "Seated Dumbbell Palms-Down Wrist Curl",
+  "muscles": [
+   "forearms"
+  ],
+  "steps": [
+   "Start out by placing two dumbbells on the floor in front of a flat bench.",
+   "Sit down on the edge of the flat bench with your legs at about shoulder width apart. Make sure to keep your feet on the floor.",
+   "Use your arms to grab both of the dumbbells and bring them up so that your forearms are resting against your thighs with the palms of the hands facing down. Your wrists should be hanging over the edge of your thighs.",
+   "Start out by curling your wrist upwards and exhaling.",
+   "Slowly lower your wrists back down to the starting position while inhaling. Make sure to inhale during this part of the exercise. Tip: Your forearms should be stationary as your wrist is the only movement needed to perform this exercise.",
+   "Repeat for the recommended amount of repetitions.",
+   "When finished, simply lower the dumbbells to the floor."
+  ]
+ },
  "Seated_Dumbbell_Press": {
   "file": "b21fcd2e",
   "name": "Seated Dumbbell Press",
@@ -787,6 +845,20 @@
    "As you exhale, push the dumbbells up until they touch at the top.",
    "After a second pause, slowly come down back to the starting position as you inhale.",
    "Repeat for the recommended amount of repetitions."
+  ]
+ },
+ "Seated_Palm-Up_Barbell_Wrist_Curl": {
+  "file": "3b7a51d3",
+  "name": "Seated Palm-Up Barbell Wrist Curl",
+  "muscles": [
+   "forearms"
+  ],
+  "steps": [
+   "Hold a barbell with both hands and your palms facing up; hands spaced about shoulder width.",
+   "Place your feet flat on the floor, at a distance that is slightly wider than shoulder width apart.",
+   "Lean forward and place your forearms on top of your upper thighs with your palms up. Tip: Make sure that the front of the wrists lay on top of your knees. This will be your starting position.",
+   "Lower the bar as far as possible while inhaling and keeping a tight grip.",
+   "Now curl bar up as high as possible while flexing the forearms and exhaling. Hold the contraction at the top for a second and Tip: Only the wrist should move."
   ]
  },
  "Seated_Triceps_Press": {

@@ -31,6 +31,7 @@ const ALIASES = {
   'pec deck · machine (with pause)': 'Pec Deck · Machine',
   'штанга бицепс': 'Curl · Barbell',
   'gym of arnold': 'Arnold Press · Dumbbell',
+  'walk fermer': 'Farmer Walk',
   'back delta': 'Reverse Fly · Machine',
   'back delt': 'Reverse Fly · Machine',
   'задние дельты': 'Reverse Fly · Machine',

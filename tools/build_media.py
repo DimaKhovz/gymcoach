@@ -98,6 +98,12 @@ MAPPING = {
     'Decline Sit Up': 'Decline_Crunch',
     'Crunch · Stability Ball': 'Exercise_Ball_Crunch',
     'muscle up': 'Muscle_Up',
+    'Lateral Raise (техника) · Dumbbell': 'Side_Lateral_Raise',
+    'Clean and Press · Barbell': 'Clean_and_Press',
+    'Clean and Press · Dumbbell': 'Dumbbell_Clean',
+    'Wrist Curl · Barbell': 'Seated_Palm-Up_Barbell_Wrist_Curl',
+    'Reverse Wrist Curl · Dumbbell': 'Seated_Dumbbell_Palms-Down_Wrist_Curl',
+    'Farmer Walk': 'Farmers_Walk',
 }
 
 

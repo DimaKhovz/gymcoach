@@ -241,3 +241,4 @@ body.modal-open { overflow: hidden; }
 }
 .result img { width: 72px; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 8px; background: #fff; flex: none; }
 .result span { display: flex; flex-direction: column; }
+.note { margin: 2px 0 6px; padding-left: 10px; border-left: 2px solid var(--info); color: var(--text); opacity: .85; }
