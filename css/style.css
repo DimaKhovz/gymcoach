@@ -255,3 +255,6 @@ body.modal-open { overflow: hidden; }
 #pkChips { position: sticky; top: -16px; background: var(--card); padding-top: 4px; z-index: 1; }
 
 .backup-card { border-color: rgba(255, 159, 67, .55); background: linear-gradient(0deg, rgba(255, 159, 67, .06), rgba(255, 159, 67, .06)), var(--card); }
+
+.switch { display: flex; align-items: flex-start; gap: 10px; margin: 10px 0; font-size: 14px; }
+.switch input { width: 20px; height: 20px; margin: 1px 0 0; accent-color: var(--accent); flex: none; }

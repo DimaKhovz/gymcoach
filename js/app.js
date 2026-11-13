@@ -318,7 +318,7 @@ function toggleSet(i, j) {
       if (!n.done && !n.edited) n.w = next;
     }
   }
-  if (s.done) startTimer(it.plan.rest || 90);
+  if (s.done) startTimer(it.plan.rest || 90, nextUpLabel(i, j));
   save(KEYS.draft, state.draft);
   renderSession();
 }
@@ -358,10 +358,75 @@ function finishSession() {
 // ---------- таймер отдыха ----------
 
 let timer = null;
-function startTimer(sec) {
-  timer = { end: Date.now() + sec * 1000, total: sec, buzzed: false };
+// Что делать после отдыха: следующий невыполненный подход этого упражнения или следующее упражнение.
+function nextUpLabel(i, j) {
+  const items = state.draft.items;
+  for (let a = i; a < items.length; a++) {
+    const from = a === i ? j + 1 : 0;
+    const k = items[a].sets.findIndex((x, idx) => idx >= from && !x.done);
+    if (k >= 0) {
+      const title = mediaFor(items[a].name)?.title || items[a].name;
+      const st = items[a].sets[k];
+      return `${title}, подход ${k + 1}${st.w ? ` · ${fmtW(+st.w)} кг × ${st.r}` : ''}`;
+    }
+  }
+  return 'Все подходы выполнены — можно завершать';
+}
+
+function startTimer(sec, nextUp = '') {
+  timer = { end: Date.now() + sec * 1000, total: sec, buzzed: false, nextUp };
   document.body.classList.add('timer-on');
+  notifyRestStart();
   tickTimer();
+}
+
+// ---------- уведомления на часы ----------
+// Часы Amazfit получают уведомления телефона через Zepp и вибрируют.
+// На Android уведомления из веб-приложения показываются только через service worker.
+
+function notifyEnabled() {
+  return state.settings.watchNotify && 'Notification' in window && Notification.permission === 'granted';
+}
+async function showNote(title, body, { silent = false } = {}) {
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration();
+    if (!reg) return false;
+    await reg.showNotification(title, {
+      body, tag: 'gc-rest', renotify: !silent, silent,
+      icon: 'icons/icon-192.png', badge: 'icons/icon-192.png',
+      vibrate: silent ? undefined : [300, 150, 300, 150, 300],
+    });
+    return true;
+  } catch { return false; }
+}
+function clockText(ms) {
+  const d = new Date(ms);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+}
+function notifyRestStart() {
+  if (!timer || !notifyEnabled() || !state.settings.watchNotifyStart) return;
+  showNote(`Отдых ${fmtSec(timer.total)} — до ${clockText(timer.end)}`, `Дальше: ${timer.nextUp}`);
+}
+function notifyRestEnd() {
+  if (!timer || !notifyEnabled()) return;
+  showNote('Отдых закончен — подход!', `Дальше: ${timer.nextUp}`);
+}
+async function closeRestNote() {
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration();
+    (await reg?.getNotifications({ tag: 'gc-rest' }))?.forEach(n => n.close());
+  } catch { /* не важно */ }
+}
+
+async function enableWatchNotify() {
+  if (!('Notification' in window)) { toast('Этот браузер не умеет показывать уведомления'); return false; }
+  let perm = Notification.permission;
+  if (perm === 'default') perm = await Notification.requestPermission();
+  if (perm !== 'granted') {
+    toast('Уведомления запрещены. Разреши их: Настройки Android → Приложения → GymCoach → Уведомления');
+    return false;
+  }
+  return true;
 }
 function stopTimer() {
   timer = null;
@@ -377,6 +442,7 @@ function tickTimer() {
     timer.buzzed = true;
     navigator.vibrate?.([300, 120, 300]);
     beep();
+    notifyRestEnd();
   }
   if (left < -300) stopTimer();
 }
@@ -643,6 +709,22 @@ function renderSettings() {
     </div>
 
     <div class="card">
+      <h3>Часы и уведомления</h3>
+      <p class="small muted">Когда отдых заканчивается, GymCoach присылает уведомление. Zepp пересылает его на часы Amazfit, и они вибрируют, так что кнопку таймера на часах нажимать не нужно.</p>
+      <label class="switch"><input type="checkbox" id="watchNotify" ${s.watchNotify && typeof Notification !== 'undefined' && Notification.permission === 'granted' ? 'checked' : ''}><span>Сигнал «Отдых закончен» на часы</span></label>
+      <label class="switch"><input type="checkbox" id="watchNotifyStart" ${s.watchNotifyStart ? 'checked' : ''}><span>Ещё и в начале отдыха: «Отдых до 15:08:30» (часы вибрируют дважды)</span></label>
+      <button class="block" data-act="test-notify" style="margin-top:8px">Проверить на часах (сигнал через 5 секунд)</button>
+      <details class="small muted" style="margin-top:10px"><summary>Если на часы не приходит</summary>
+        <ol class="steps">
+          <li>Zepp → Профиль → Amazfit GTS 4 mini → Уведомления: включи и отметь в списке приложений <b>Chrome</b>. Иногда GymCoach показан отдельной строкой — тогда отметь её.</li>
+          <li>Android: Настройки → Приложения → GymCoach (или Chrome) → Уведомления → разрешить.</li>
+          <li>На часах выключи «Не беспокоить». В Zepp проверь, что пересылка работает и при включённом экране телефона: опция вроде «Уведомлять, даже когда телефон разблокирован».</li>
+          <li>Во время тренировки не блокируй телефон кнопкой: приложение само не даёт экрану погаснуть. Если заблокировать, сигнал может прийти с опозданием.</li>
+        </ol>
+      </details>
+    </div>
+
+    <div class="card">
       <h3>Данные</h3>
       <p class="small muted">Всё хранится только на этом телефоне. Отправляй копию в Telegram «Избранное» или на Google Диск раз в неделю: тогда данные не пропадут даже при потере телефона.</p>
       <p class="small" style="margin:0 0 10px">${backupStatusText()}</p>
@@ -760,7 +842,7 @@ fileJson.addEventListener('change', async () => {
 function saveTemplates() { save(KEYS.templates, state.templates); }
 function saveSettings() { save(KEYS.settings, state.settings); renderPhasePill(); }
 
-view.addEventListener('click', e => {
+view.addEventListener('click', async e => {
   const b = e.target.closest('button');
   if (!b) return;
   const { act } = b.dataset;
@@ -811,6 +893,14 @@ view.addEventListener('click', e => {
     case 'import-json': fileJson.click(); break;
     case 'export-json': exportJson(); renderSettings(); break;
     case 'share-backup': shareBackup(); break;
+    case 'test-notify': {
+      if (!(await enableWatchNotify())) return;
+      state.settings.watchNotify = true; saveSettings();
+      const cb = document.getElementById('watchNotify'); if (cb) cb.checked = true;
+      toast('Жди сигнал на часах через 5 секунд');
+      setTimeout(() => showNote('GymCoach: проверка часов', 'Если часы завибрировали — всё работает 💪').then(ok => { if (!ok) toast('Не получилось показать уведомление'); }), 5000);
+      break;
+    }
     case 'backup-later':
       save('gc.backupSnooze', today()); renderToday(); break;
     case 'wipe':
@@ -859,9 +949,15 @@ view.addEventListener('input', e => {
   if (el.dataset.tplTitle != null) { state.templates[el.dataset.tplTitle].title = el.value; saveTemplates(); }
 });
 
-view.addEventListener('change', e => {
+view.addEventListener('change', async e => {
   const el = e.target;
   if (el.id === 'progressEx') { state.progressEx = el.value; renderProgress(); }
+  if (el.id === 'watchNotify') {
+    if (el.checked && !(await enableWatchNotify())) { el.checked = false; return; }
+    state.settings.watchNotify = el.checked; saveSettings();
+    toast(el.checked ? 'Сигнал на часы включён' : 'Сигнал на часы выключен');
+  }
+  if (el.id === 'watchNotifyStart') { state.settings.watchNotifyStart = el.checked; saveSettings(); }
   if (el.id === 'bodyweight') { state.settings.bodyweight = +el.value || 72; saveSettings(); }
   if (el.id === 'blockStart' && el.value) { state.settings.blockStart = E.mondayOf(el.value); saveSettings(); renderSettings(); }
   if (el.id === 'phaseOrder') { state.settings.phaseOrder = el.value.split(','); saveSettings(); renderSettings(); }
@@ -875,8 +971,15 @@ view.addEventListener('change', e => {
 document.getElementById('timer').addEventListener('click', e => {
   const v = e.target.closest('button')?.dataset.timer;
   if (!v || !timer) return;
-  if (v === 'stop') stopTimer();
-  else { timer.end += +v * 1000; timer.total = Math.max(timer.total, (timer.end - Date.now()) / 1000); tickTimer(); }
+  if (v === 'stop') { stopTimer(); closeRestNote(); }
+  else {
+    timer.end += +v * 1000;
+    timer.total = Math.max(timer.total, (timer.end - Date.now()) / 1000);
+    if (notifyEnabled() && state.settings.watchNotifyStart && !timer.buzzed) {
+      showNote(`Отдых — до ${clockText(timer.end)}`, `Дальше: ${timer.nextUp}`, { silent: true });
+    }
+    tickTimer();
+  }
 });
 
 document.getElementById('tabs').addEventListener('click', e => {

@@ -1,5 +1,5 @@
 // Офлайн-кэш: приложение открывается в зале и без интернета.
-const CACHE = 'gymcoach-v5';
+const CACHE = 'gymcoach-v6';
 const FILES = ['./', 'index.html', 'css/style.css', 'js/app.js', 'js/engine.js', 'js/parser.js', 'js/media.js',
   'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png',
   'data/mapping.json', 'data/instructions-en.json', 'data/instructions-ru.json', 'data/exdb-index.json'];
@@ -35,4 +35,13 @@ self.addEventListener('fetch', e => {
       })
       .catch(() => caches.match(e.request, { ignoreSearch: true }))
   );
+});
+
+// Нажатие на уведомление об отдыхе — вернуться в приложение.
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+    const win = list.find(c => c.url.includes(self.registration.scope));
+    return win ? win.focus() : self.clients.openWindow('./');
+  }));
 });
