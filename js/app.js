@@ -1,6 +1,6 @@
 import { parseGymKeeperTxt, normalizeName } from './parser.js';
 import * as E from './engine.js';
-import { initMedia, mediaFor, stepsFor, setPick, searchDb } from './media.js';
+import { initMedia, mediaFor, stepsFor, setPick, searchDb, bundledNames, appNameFor, customNames, customInfo, saveCustom, shrinkPhoto, norm, stem, CUSTOM_KEY } from './media.js';
 import { L, LANG, setLang, dayTitle, exName } from './i18n.js';
 
 // ---------- хранилище ----------
@@ -804,7 +804,7 @@ function backupText() {
   try { media = JSON.parse(localStorage.getItem('gc.media') || '{}'); } catch { /* пусто */ }
   return JSON.stringify({
     app: 'gymcoach', version: 1, exportedAt: new Date().toISOString(),
-    workouts: state.workouts, settings: state.settings, templates: state.templates, media,
+    workouts: state.workouts, settings: state.settings, templates: state.templates, media, custom: load(CUSTOM_KEY, {}),
   });
 }
 function backupName() { return `gymcoach-backup-${today()}.txt`; }
@@ -856,6 +856,7 @@ function importJson(text) {
   save(KEYS.settings, state.settings);
   save(KEYS.templates, state.templates);
   if (data.media) save('gc.media', data.media);
+  if (data.custom) save(CUSTOM_KEY, data.custom);
   markBackup();
   toast(L('Восстановлено', 'Restored'));
   setTimeout(() => location.reload(), 800);
@@ -1054,6 +1055,22 @@ function showModal(html) {
 async function openMedia(name) {
   const m = mediaFor(name);
   if (!m) return openPicker(name);
+  if (m.custom) {
+    showModal(`
+      <div class="row between"><h3 style="margin:0">${esc(m.title)}</h3><button class="ghost small" data-m="close" aria-label="${L('Закрыть', 'Close')}">✕</button></div>
+      <div class="small muted" style="margin-bottom:8px">${esc(name)} · ${L('твоё упражнение', 'your exercise')}</div>
+      <img src="${esc(m.frames[0])}" alt="" style="width:100%;border-radius:12px;display:block">
+      <label class="block photo-btn" style="margin-top:10px">📷 ${L('Переснять фото', 'Retake photo')}<input type="file" accept="image/*" capture="environment" id="cfRetake" hidden></label>`);
+    document.getElementById('cfRetake').addEventListener('change', async e => {
+      const f = e.target.files[0];
+      if (!f) return;
+      try {
+        saveCustom(name, { ...customInfo(name), photo: await shrinkPhoto(f) });
+        closeModal(); render(); toast(L('Фото обновлено', 'Photo updated'));
+      } catch { toast(L('Не получилось сохранить фото: память телефона заполнена', 'Could not save the photo: storage is full')); }
+    });
+    return;
+  }
   showModal(`
     <div class="row between"><h3 style="margin:0">${esc(m.title)}</h3><button class="ghost small" data-m="close" aria-label="${L('Закрыть', 'Close')}">✕</button></div>
     <div class="small muted" style="margin-bottom:8px">${esc(exName(name))}</div>
@@ -1080,17 +1097,27 @@ const DB_MUSCLE = {
   quadriceps: 'legs', hamstrings: 'legs', glutes: 'legs', calves: 'legs', adductors: 'legs', abductors: 'legs',
   abdominals: 'abs',
 };
-const addPicker = { cb: null, muscle: '', q: '' };
+const addPicker = { cb: null, muscle: '', q: '', photo: null };
 
+// Все упражнения приложения: из истории, программы, встроенные в приложение и свои с фото.
+// Одинаковые картинки (например, «Pull Up» и «Pull Up (Wide Grip)») показываем один раз — тот, что делал чаще.
 function exerciseCandidates() {
   const count = {};
   for (const w of state.workouts) for (const ex of w.exercises) count[ex.name] = (count[ex.name] || 0) + 1;
   for (const t of Object.values(state.templates)) for (const n of t.exercises) count[n] = count[n] || 0;
-  return Object.entries(count)
-    .map(([name, c]) => ({ name, count: c, media: mediaFor(name), muscle: E.muscleOf(name) }))
-    // в списке — упражнения с картинкой или те, что делал хотя бы 3 раза
-    .filter(x => x.media || x.count >= 3)
-    .sort((a, b) => (!!b.media - !!a.media) || b.count - a.count);
+  for (const n of bundledNames()) count[n] = count[n] || 0;
+  for (const n of customNames()) count[n] = count[n] || 0;
+  const best = new Map();
+  for (const [name, c] of Object.entries(count)) {
+    const media = mediaFor(name);
+    if (!media && c < 3) continue;
+    const meta = E.exerciseMeta(name);
+    const key = media?.id ? `${media.id}|${meta.kind}` : name;
+    const cur = best.get(key);
+    if (!cur || c > cur.count) best.set(key, { name, count: c, media, muscle: meta.muscle });
+  }
+  return [...best.values()].sort((a, b) => b.count - a.count
+    || (a.media?.title || a.name).localeCompare(b.media?.title || b.name, LANG));
 }
 
 function openExercisePicker(title, cb) {
@@ -1099,7 +1126,7 @@ function openExercisePicker(title, cb) {
   addPicker.q = '';
   showModal(`
     <div class="row between"><h3 style="margin:0">${esc(title)}</h3><button class="ghost small" data-m="close" aria-label="${L('Закрыть', 'Close')}">✕</button></div>
-    <input id="pkSearch" type="search" placeholder="${L('Поиск: жим, тяга, махи, bench…', 'Search: bench, row, curl, raise…')}" style="width:100%;margin:10px 0 8px" autocomplete="off">
+    <input id="pkSearch" type="search" placeholder="${L('Поиск: бицепс гантели, жим, махи…', 'Search: bench, row, curl, raise…')}" style="width:100%;margin:10px 0 8px" autocomplete="off">
     <div class="chips" id="pkChips">
       <button class="chip on" data-m="flt" data-mu="">${L('Все', 'All')}</button>
       ${MUSCLE_FILTERS.map(m => `<button class="chip" data-m="flt" data-mu="${m}">${E.MUSCLE_LABELS[m]}</button>`).join('')}
@@ -1116,20 +1143,20 @@ function pickRow(attrs, thumb, titleText, sub) {
 let pickerSeq = 0;
 async function renderPickerList() {
   const seq = ++pickerSeq;
-  const q = addPicker.q.trim().toLowerCase();
-  const words = q.split(/\s+/).filter(Boolean);
+  const q = addPicker.q.trim();
+  const words = norm(q).split(/\s+/).filter(w => w.length > 1).map(stem);
   const mine = exerciseCandidates().filter(x =>
     (!addPicker.muscle || x.muscle === addPicker.muscle) &&
-    (!words.length || words.every(w => (x.name + ' ' + (x.media?.title || '') + ' ' + (x.media?.en || '')).toLowerCase().includes(w))));
+    (!words.length || words.every(w => norm(`${x.name} ${x.media?.title || ''} ${x.media?.en || ''} ${E.MUSCLE_LABELS[x.muscle]}`).includes(w))));
 
   let html = '';
   if (mine.length) {
-    html += `<div class="pk-head">${L('Твои упражнения', 'Your exercises')}</div>` + mine.map(x => {
+    html += `<div class="pk-head">${L('Упражнения в приложении', 'Exercises in the app')}</div>` + mine.map(x => {
       const title = x.media?.title || exName(x.name);
       const thumb = x.media
         ? `<span class="anim mini"><img src="${esc(x.media.frames[0])}" alt="" loading="lazy"><img class="f2" src="${esc(x.media.frames[1])}" alt="" loading="lazy"></span>`
         : '<span class="anim mini empty-anim">?</span>';
-      const sub = `${title !== exName(x.name) ? exName(x.name) + ' · ' : ''}${E.MUSCLE_LABELS[x.muscle]}${x.count ? ` · ${L(`делал ${x.count} раз`, `done ${x.count} times`)}` : ''}`;
+      const sub = `${E.MUSCLE_LABELS[x.muscle]}${x.count ? ` · ${L(`делал ${x.count} раз`, `done ${x.count} times`)}` : ''}`;
       return pickRow(`data-m="add-pick" data-name="${esc(x.name)}"`, thumb, title, sub);
     }).join('');
   }
@@ -1140,28 +1167,86 @@ async function renderPickerList() {
     if (seq !== pickerSeq) return;
     if (more) {
       const have = new Set(mine.map(x => x.media?.id).filter(Boolean));
-      more = more.filter(r => !have.has(r.id) && (!addPicker.muscle || DB_MUSCLE[r.muscle] === addPicker.muscle)).slice(0, 25);
+      more = more.filter(r => !r.bundled && !have.has(r.id) && (!addPicker.muscle || DB_MUSCLE[r.muscle] === addPicker.muscle)).slice(0, 25);
       if (more.length) {
-        html += `<div class="pk-head">${L('Ещё из базы (названия по-английски)', 'More from the database')}</div>` + more.map(r => pickRow(
+        html += `<div class="pk-head">${L('Ещё из большой базы (картинка с интернетом)', 'More from the big database (picture needs internet)')}</div>` + more.map(r => pickRow(
           `data-m="add-db" data-id="${esc(r.id)}" data-dbname="${esc(r.name)}"`,
           `<span class="anim mini"><img src="${esc(r.thumb)}" alt="" loading="lazy"></span>`,
-          r.name, `${E.MUSCLE_LABELS[DB_MUSCLE[r.muscle] || 'other']} · ${r.equip}`,
+          LANG === 'en' ? r.name : (r.ru || r.name), `${E.MUSCLE_LABELS[DB_MUSCLE[r.muscle] || 'other']}${LANG === 'en' ? '' : ' · ' + r.name}`,
         )).join('');
       }
     } else {
-      html += `<p class="muted small">${L('Остальная база доступна только с интернетом.', 'The rest of the database needs internet.')}</p>`;
+      html += `<p class="muted small">${L('Большая база доступна только с интернетом.', 'The big database needs internet.')}</p>`;
     }
-    html += `<button class="small ghost" data-m="add-custom" style="margin-top:8px">＋ ${L(`Своё упражнение «${esc(addPicker.q.trim())}» (без картинки)`, `Custom exercise "${esc(addPicker.q.trim())}" (no picture)`)}</button>`;
   }
+  html += `<button class="block photo-btn" data-m="custom-form" style="margin-top:10px">📷 ${q
+    ? L(`Своё упражнение «${esc(q)}» с фото`, `Custom exercise "${esc(q)}" with a photo`)
+    : L('Своё упражнение: сфотографировать тренажёр', 'Custom exercise: take a photo of the machine')}</button>`;
   if (seq !== pickerSeq) return;
   const box = document.getElementById('pkList');
-  if (box) box.innerHTML = html || `<p class="muted small">${L('Ничего не нашлось. Попробуй другое слово.', 'Nothing found. Try another word.')}</p>`;
+  if (box) box.innerHTML = (mine.length || words.length ? '' : `<p class="muted small">${L('Ничего не нашлось. Попробуй другое слово.', 'Nothing found. Try another word.')}</p>`) + html;
 }
 
 function finishPick(name) {
   const cb = addPicker.cb;
   closeModal();
   cb?.(name);
+}
+
+// ---------- своё упражнение с фото тренажёра ----------
+
+const EQUIP_SUFFIX = { machine: ' · Machine', cable: ' · Cable', dumbbell: ' · Dumbbell', barbell: ' · Barbell', bodyweight: '' };
+
+function openCustomForm(prefill = '') {
+  addPicker.photo = null;
+  const mu = addPicker.muscle || 'biceps';
+  showModal(`
+    <div class="row between"><h3 style="margin:0">${L('Своё упражнение', 'Custom exercise')}</h3><button class="ghost small" data-m="close" aria-label="${L('Закрыть', 'Close')}">✕</button></div>
+    <label class="field"><span>${L('Название', 'Name')}</span><input id="cfName" value="${esc(prefill)}" placeholder="${L('Например: бицепс в тренажёре', 'For example: biceps machine')}" autocomplete="off"></label>
+    <label class="field"><span>${L('Какие мышцы', 'Muscles')}</span><select id="cfMuscle">${MUSCLE_FILTERS.map(m => `<option value="${m}" ${m === mu ? 'selected' : ''}>${E.MUSCLE_LABELS[m]}</option>`).join('')}</select></label>
+    <label class="field"><span>${L('Чем делается', 'Equipment')}</span><select id="cfEquip">
+      <option value="machine">${L('Тренажёр', 'Machine')}</option>
+      <option value="cable">${L('Блок (трос)', 'Cable')}</option>
+      <option value="dumbbell">${L('Гантели', 'Dumbbells')}</option>
+      <option value="barbell">${L('Штанга', 'Barbell')}</option>
+      <option value="bodyweight">${L('Свой вес', 'Bodyweight')}</option>
+    </select></label>
+    <label class="switch"><input type="checkbox" id="cfCompound"><span>${L('Многосуставное: жим, тяга, приседание (веса будут как в базовых)', 'Compound: press, row, squat (weights like main lifts)')}</span></label>
+    <label class="block photo-btn" style="margin-top:10px">📷 ${L('Сфотографировать тренажёр', 'Take a photo of the machine')}<input type="file" accept="image/*" capture="environment" id="cfPhoto" hidden></label>
+    <img id="cfPreview" alt="" style="width:100%;border-radius:12px;margin-top:8px;display:none">
+    <p class="small muted" id="cfErr" style="color:var(--bad);display:none"></p>
+    <button class="primary block" data-m="cf-save" style="margin-top:10px">${L('Сохранить и добавить', 'Save and add')}</button>`);
+  document.getElementById('cfPhoto').addEventListener('change', async e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    try {
+      addPicker.photo = await shrinkPhoto(f);
+      const im = document.getElementById('cfPreview');
+      im.src = addPicker.photo; im.style.display = 'block';
+    } catch { toast(L('Не получилось открыть фото', 'Could not open the photo')); }
+  });
+  document.getElementById('cfName').focus();
+}
+
+function saveCustomForm() {
+  const raw = document.getElementById('cfName').value.trim().replace(/\s*·\s*/g, ' ');
+  const err = document.getElementById('cfErr');
+  if (!raw) { err.textContent = L('Напиши название упражнения', 'Enter the exercise name'); err.style.display = 'block'; return; }
+  const equip = document.getElementById('cfEquip').value;
+  const name = raw + EQUIP_SUFFIX[equip];
+  const info = {
+    photo: addPicker.photo || customInfo(name)?.photo || null,
+    muscle: document.getElementById('cfMuscle').value,
+    equip,
+    kind: document.getElementById('cfCompound').checked ? 'compound' : 'isolation',
+  };
+  try { saveCustom(name, info); } catch {
+    err.textContent = L('Память телефона заполнена: фото не сохранилось. Попробуй без фото.', 'Storage is full: the photo was not saved. Try without a photo.');
+    err.style.display = 'block'; return;
+  }
+  E.registerExercise(name, info);
+  toast(L('Упражнение сохранено', 'Exercise saved'));
+  finishPick(name);
 }
 
 let pickerFor = null;
@@ -1171,7 +1256,7 @@ async function openPicker(name) {
   showModal(`
     <div class="row between"><h3 style="margin:0">${L('Картинка для упражнения', 'Exercise picture')}</h3><button class="ghost small" data-m="close" aria-label="${L('Закрыть', 'Close')}">✕</button></div>
     <div class="small muted" style="margin:4px 0 8px">${esc(exName(name))}</div>
-    <input id="mSearch" type="search" placeholder="${L('Поиск по-английски: bench, curl, row…', 'Search: bench, curl, row…')}" value="${esc(words)}" style="width:100%">
+    <input id="mSearch" type="search" placeholder="${L('Поиск: бицепс гантели, жим, bench…', 'Search: bench, curl, row…')}" value="${esc(words)}" style="width:100%">
     <div id="mResults" class="results"></div>
     ${mediaFor(name) ? `<button class="small ghost danger" data-m="unpick" style="margin-top:8px">${L('Убрать свою картинку', 'Remove my picture')}</button>` : ''}`);
   const inp = document.getElementById('mSearch');
@@ -1189,7 +1274,7 @@ async function runSearch(q) {
   if (!box) return;
   if (!res) { box.innerHTML = `<p class="muted small">${L('Поиск не загрузился. Нужен интернет.', 'Search didn\'t load. Internet is needed.')}</p>`; return; }
   box.innerHTML = res.length
-    ? res.map(r => `<button class="result" data-m="choose" data-id="${esc(r.id)}"><img src="${esc(r.thumb)}" alt="" loading="lazy"><span><b>${esc(r.name)}</b><small class="muted">${esc(r.muscle)} · ${esc(r.equip)}</small></span></button>`).join('')
+    ? res.map(r => `<button class="result" data-m="choose" data-id="${esc(r.id)}"><img src="${esc(r.thumb)}" alt="" loading="lazy"><span><b>${esc(LANG === 'en' ? r.name : (r.ru || r.name))}</b><small class="muted">${esc(LANG === 'en' ? r.muscle : r.name)} · ${esc(r.equip)}</small></span></button>`).join('')
     : `<p class="muted small">${L('Ничего не нашлось. Попробуй другое слово.', 'Nothing found. Try another word.')}</p>`;
 }
 
@@ -1206,11 +1291,13 @@ modal.addEventListener('click', e => {
   }
   if (a === 'add-pick') finishPick(b.dataset.name);
   if (a === 'add-db') {
-    const name = b.dataset.dbname;
-    setPick(name, b.dataset.id); // запоминаем картинку для нового упражнения
+    // встроенное упражнение — под своим именем из дневника, остальные — под названием базы с её картинкой
+    const name = appNameFor(b.dataset.id) || b.dataset.dbname;
+    if (!appNameFor(b.dataset.id)) setPick(name, b.dataset.id);
     finishPick(name);
   }
-  if (a === 'add-custom' && addPicker.q.trim()) finishPick(normalizeName(addPicker.q.trim()));
+  if (a === 'custom-form') openCustomForm(addPicker.q.trim());
+  if (a === 'cf-save') saveCustomForm();
   if (a === 'pick') openPicker(b.dataset.name);
   if (a === 'choose' || a === 'unpick') {
     setPick(pickerFor, a === 'choose' ? b.dataset.id : null);
@@ -1231,6 +1318,7 @@ if (LANG === 'en') {
 }
 
 await initMedia();
+for (const n of customNames()) E.registerExercise(n, customInfo(n));
 render();
 if (state.draft) requestWakeLock();
 

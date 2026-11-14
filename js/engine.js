@@ -114,7 +114,19 @@ const CATALOG = {
   'Glute Bridge · Barbell': { kind: 'compound', equip: 'barbell', muscle: 'legs' },
   'Face Pull · Cable': { kind: 'isolation', equip: 'cable', muscle: 'shoulders' },
   'Hammer Strength Press · Machine': { kind: 'compound', equip: 'machine', muscle: 'chest' },
+  'Close Grip Press · Dumbbell': { kind: 'compound', equip: 'dumbbell', muscle: 'triceps' },
+  'JM Press · Barbell': { kind: 'compound', equip: 'barbell', muscle: 'triceps' },
+  'Pullover · Dumbbell': { kind: 'isolation', equip: 'dumbbell', muscle: 'chest' },
+  'Finger Curl · Barbell': { kind: 'isolation', equip: 'barbell', muscle: 'forearms' },
+  'Side Bend · Dumbbell': { kind: 'isolation', equip: 'dumbbell', muscle: 'abs' },
+  'Landmine 180 · Barbell': { kind: 'isolation', equip: 'barbell', muscle: 'abs' },
 };
+
+// Свои упражнения (с фото тренажёра): мышцы и тип задаёт пользователь.
+export function registerExercise(name, info) {
+  if (!info) return;
+  CATALOG[name] = { kind: info.kind || 'isolation', equip: info.equip || 'machine', muscle: info.muscle || 'other' };
+}
 
 const COMPOUND_RE = /bench press|press|squat|deadlift|row|pull ?up|pull-up|chin up|dip|pull down|lunge|hip thrust|glute bridge|push up/i;
 

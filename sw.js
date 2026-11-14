@@ -1,8 +1,8 @@
 // Офлайн-кэш: приложение открывается в зале и без интернета.
-const CACHE = 'gymcoach-v8';
+const CACHE = 'gymcoach-v9';
 const FILES = ['./', 'index.html', 'css/style.css', 'js/app.js', 'js/engine.js', 'js/parser.js', 'js/media.js', 'js/i18n.js',
   'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png',
-  'data/mapping.json', 'data/instructions-en.json', 'data/instructions-ru.json', 'data/exdb-index.json'];
+  'data/mapping.json', 'data/instructions-en.json', 'data/instructions-ru.json', 'data/names-ru.json', 'data/exdb-index.json'];
 
 // Встроенные кадры упражнений тоже кладём в кэш сразу, чтобы в зале всё было без интернета.
 async function precache() {
