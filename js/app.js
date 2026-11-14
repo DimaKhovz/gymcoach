@@ -386,7 +386,9 @@ function nextUpLabel(i, j) {
 function startTimer(sec, nextUp = '') {
   timer = { end: Date.now() + sec * 1000, total: sec, buzzed: false, nextUp };
   document.body.classList.add('timer-on');
-  notifyRestStart();
+  // старый сигнал «Отдых закончен» убираем сами: смахнутые вручную уведомления
+  // Chrome считает нежелательными и может начать помечать сайт как спам
+  closeRestNote().then(notifyRestStart);
   tickTimer();
 }
 
@@ -419,7 +421,10 @@ function notifyRestStart() {
 }
 function notifyRestEnd() {
   if (!timer || !notifyEnabled()) return;
+  const t = timer;
   showNote(L('Отдых закончен — подход!', 'Rest is over — next set!'), `${L('Дальше', 'Next')}: ${timer.nextUp}`);
+  // часы уже завибрировали; через 90 секунд уведомление само исчезает с телефона
+  setTimeout(() => { if (timer === t || !timer) closeRestNote(); }, 90000);
 }
 async function closeRestNote() {
   try {
@@ -440,6 +445,7 @@ async function enableWatchNotify() {
 }
 function stopTimer() {
   timer = null;
+  closeRestNote();
   document.body.classList.remove('timer-on');
 }
 function tickTimer() {
