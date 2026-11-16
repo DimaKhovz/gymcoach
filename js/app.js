@@ -185,7 +185,7 @@ function renderToday() {
       <h2 style="margin:2px 0 10px">${esc(dayTitle(tpl?.title || 'Тренировка'))}</h2>
       <ul class="tips">${tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul>
     </div>
-    ${plans.map(p => `
+    ${plans.map((p, i) => `
       <div class="card tight">
         <div class="ex-head">
           ${animThumb(p.name)}
@@ -193,12 +193,16 @@ function renderToday() {
             <div class="ex-name">${esc(exName(p.name))}</div>
             ${p.warmup ? '' : trendBadge(p.trend, p.e1rm)}
           </div>
+          ${i > 0 ? `<button class="ghost small" data-act="tpl-up" data-day="${dayKey}" data-i="${i}" aria-label="${L('Выше', 'Move up')}">↑</button>` : ''}
+          <button class="ghost small" data-act="tpl-del" data-day="${dayKey}" data-i="${i}" aria-label="${L('Убрать упражнение', 'Remove exercise')}">✕</button>
         </div>
         <div class="target">${targetText(p)}</div>
         ${p.meta.note ? `<div class="note small">${esc(p.meta.note)}</div>` : ''}
         <div class="small muted">${p.last ? `${L('Прошлый раз', 'Last time')} (${fmtDate(p.last.date, false)}): ${esc(E.formatSets(p.last.sets))}` : L('Ещё не делал', 'Not done yet')}
         ${p.e1rm ? ` · ${L('1ПМ', '1RM')} ≈ ${Math.round(p.e1rm)} ${L('кг', 'kg')}` : ''}</div>
       </div>`).join('')}
+    ${tpl ? `<button class="block add-ex-btn" data-act="tpl-add" data-day="${dayKey}">＋ ${L('Добавить упражнение', 'Add exercise')}</button>
+    <p class="small muted" style="margin:-4px 0 12px">${L(`Изменения сохраняются в программу на ${E.WEEKDAYS[dayKey]}: следующие тренировки этого дня будут такими же.`, `Changes are saved to the ${E.WEEKDAYS[dayKey]} program: future workouts on this day will be the same.`)}</p>` : ''}
     <button class="primary block" data-act="start" data-day="${dayKey}">${L('Начать тренировку', 'Start workout')}</button>
     <p class="small muted" style="margin-top:12px">${L('Вес считается от твоего 1ПМ (лучшее из последних 3 тренировок, формула Эпли) под нужные повторы с запасом. Во время тренировки следующие подходы подстраиваются под то, как прошёл предыдущий.', 'Weights are calculated from your 1RM (best of your last 3 workouts, Epley formula) for the target reps with reps in reserve. During the workout, the next sets adjust to how the previous one went.')}</p>
   `;
@@ -950,15 +954,20 @@ view.addEventListener('click', async e => {
     case 'block-now':
       state.settings.blockStart = E.mondayOf(today()); state.settings.phaseOverride = null; saveSettings(); renderSettings();
       toast(L('Новый блок начат с этой недели', 'A new block starts this week')); break;
-    case 'tpl-del': state.templates[day].exercises.splice(i, 1); saveTemplates(); renderSettings(); break;
+    // правка программы дня — и в настройках, и на экране «Сегодня» до старта тренировки
+    case 'tpl-del': {
+      const [gone] = state.templates[day].exercises.splice(i, 1); saveTemplates(); render();
+      toast(L('Убрано: ', 'Removed: ') + (mediaFor(gone)?.title || exName(gone)));
+      break;
+    }
     case 'tpl-up': {
       if (i === 0) return;
       const ex = state.templates[day].exercises;
-      [ex[i - 1], ex[i]] = [ex[i], ex[i - 1]]; saveTemplates(); renderSettings(); break;
+      [ex[i - 1], ex[i]] = [ex[i], ex[i - 1]]; saveTemplates(); render(); break;
     }
     case 'tpl-add':
       openExercisePicker(`${L('Добавить в', 'Add to')} ${E.WEEKDAYS[day]} · ${dayTitle(state.templates[day].title)}`, name => {
-        state.templates[day].exercises.push(name); saveTemplates(); renderSettings();
+        state.templates[day].exercises.push(name); saveTemplates(); render();
         toast(L('Добавлено в программу', 'Added to the program'));
       });
       break;
