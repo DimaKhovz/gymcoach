@@ -186,7 +186,7 @@ function renderToday() {
       <ul class="tips">${tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul>
     </div>
     ${plans.map((p, i) => `
-      <div class="card tight">
+      <div class="card tight ${tpl?.linked?.[i] || tpl?.linked?.[i - 1] ? 'linked' : ''}">
         <div class="ex-head">
           ${animThumb(p.name)}
           <div class="grow">
@@ -200,12 +200,20 @@ function renderToday() {
         ${p.meta.note ? `<div class="note small">${esc(p.meta.note)}</div>` : ''}
         <div class="small muted">${p.last ? `${L('Прошлый раз', 'Last time')} (${fmtDate(p.last.date, false)}): ${esc(E.formatSets(p.last.sets))}` : L('Ещё не делал', 'Not done yet')}
         ${p.e1rm ? ` · ${L('1ПМ', '1RM')} ≈ ${Math.round(p.e1rm)} ${L('кг', 'kg')}` : ''}</div>
-      </div>`).join('')}
+      </div>
+      ${i < plans.length - 1 ? linkBtn('tpl-link', i, !!tpl?.linked?.[i], dayKey) : ''}`).join('')}
     ${tpl ? `<button class="block add-ex-btn" data-act="tpl-add" data-day="${dayKey}">＋ ${L('Добавить упражнение', 'Add exercise')}</button>
     <p class="small muted" style="margin:-4px 0 12px">${L(`Изменения сохраняются в программу на ${E.WEEKDAYS[dayKey]}: следующие тренировки этого дня будут такими же.`, `Changes are saved to the ${E.WEEKDAYS[dayKey]} program: future workouts on this day will be the same.`)}</p>` : ''}
     <button class="primary block" data-act="start" data-day="${dayKey}">${L('Начать тренировку', 'Start workout')}</button>
     <p class="small muted" style="margin-top:12px">${L('Вес считается от твоего 1ПМ (лучшее из последних 3 тренировок, формула Эпли) под нужные повторы с запасом. Во время тренировки следующие подходы подстраиваются под то, как прошёл предыдущий.', 'Weights are calculated from your 1RM (best of your last 3 workouts, Epley formula) for the target reps with reps in reserve. During the workout, the next sets adjust to how the previous one went.')}</p>
   `;
+}
+
+// Кнопка между упражнениями: связать в суперсет / круг (без отдыха до следующего упражнения).
+function linkBtn(act, i, on, day = '') {
+  return `<button class="link-btn ${on ? 'on' : ''}" data-act="${act}" data-i="${i}" ${day !== '' ? `data-day="${day}"` : ''}>${on
+    ? L('⛓ суперсет: сразу к следующему, без отдыха', '⛓ superset: go straight to the next one')
+    : L('＋ связать в суперсет', '＋ link as a superset')}</button>`;
 }
 
 function backupStatusText() {
@@ -242,7 +250,7 @@ function startSession(dayKey) {
     dayKey,
     title: tpl?.title || 'Тренировка',
     phaseKey: ph.key,
-    items: plans.map(p => makeItem(p)),
+    items: plans.map((p, idx) => makeItem(p, idx < plans.length - 1 && !!tpl?.linked?.[idx])),
   };
   save(KEYS.draft, state.draft);
   requestWakeLock();
@@ -250,10 +258,11 @@ function startSession(dayKey) {
   window.scrollTo(0, 0);
 }
 
-function makeItem(p) {
+function makeItem(p, link = false) {
   const { trend, last, ...plan } = p;
   return {
     name: p.name,
+    link,
     plan,
     lastText: last ? `${fmtDate(last.date, false)}: ${E.formatSets(last.sets)}` : '',
     trend,
@@ -279,7 +288,7 @@ function renderSession() {
         <span class="pill"><span class="dot" style="background:${ph.color}"></span>${ph.label}</span>
       </div>
     </div>
-    ${d.items.map((it, i) => renderItem(it, i)).join('')}
+    ${d.items.map((it, i) => renderItem(it, i) + (i < d.items.length - 1 ? linkBtn('ses-link', i, !!it.link) : '')).join('')}
     <button class="block add-ex-btn" data-act="open-add">＋ ${L('Добавить упражнение', 'Add exercise')}</button>
     <div class="row" style="gap:10px">
       <button class="danger grow" data-act="cancel">${L('Отменить', 'Cancel')}</button>
@@ -291,16 +300,17 @@ function renderSession() {
 function renderItem(it, i) {
   const p = it.plan;
   const isBw = p.meta.equip === 'bodyweight';
+  const linked = it.link || state.draft.items[i - 1]?.link;
   const rows = it.sets.map((s, j) => `
-    <tr class="${s.done ? 'done' : ''}">
-      <td class="n">${j + 1}</td>
+    <tr class="${s.done ? 'done' : ''} ${s.drop ? 'drop' : ''}">
+      <td class="n">${s.drop ? `<span title="${L('дроп-сет: сразу после предыдущего, без отдыха', 'drop set: right after the previous one, no rest')}">↓</span>` : j + 1}</td>
       <td><input type="number" inputmode="decimal" step="any" value="${s.w ?? ''}" data-i="${i}" data-j="${j}" data-f="w" placeholder="${L('кг', 'kg')}"></td>
       <td><input type="number" inputmode="numeric" value="${s.r ?? ''}" data-i="${i}" data-j="${j}" data-f="r"></td>
       <td><select data-i="${i}" data-j="${j}" data-f="rir">${[0, 1, 2, 3, 4].map(v => `<option value="${v}" ${+s.rir === v ? 'selected' : ''}>${v === 4 ? '4+' : v}</option>`).join('')}</select></td>
       <td class="ok"><button class="check" data-act="toggle-set" data-i="${i}" data-j="${j}" aria-label="${L('Подход выполнен', 'Set done')}">✓</button></td>
     </tr>`).join('');
   return `
-    <div class="card tight">
+    <div class="card tight ${linked ? 'linked' : ''}">
       <div class="ex-head">
         ${animThumb(it.name)}
         <div class="ex-name grow">${esc(exName(it.name))}</div>
@@ -315,23 +325,55 @@ function renderItem(it, i) {
       </table>
       <div class="row" style="margin-top:6px">
         <button class="small" data-act="add-set" data-i="${i}">+ ${L('подход', 'set')}</button>
+        ${p.warmup || p.skill ? '' : `<button class="small" data-act="add-drop" data-i="${i}" title="${L('Снял вес и сразу продолжил', 'Lighter weight right away, no rest')}">+ ${L('дроп', 'drop')}</button>`}
         ${it.sets.length > 1 ? `<button class="small ghost" data-act="del-set" data-i="${i}">− ${L('подход', 'set')}</button>` : ''}
       </div>
     </div>`;
 }
 
+// Суперсет / круг: соседние упражнения, связанные цепочкой (item.link = «без отдыха к следующему»).
+function chainOf(i) {
+  const items = state.draft.items;
+  let a = i, b = i;
+  while (a > 0 && items[a - 1].link) a--;
+  while (b < items.length - 1 && items[b].link) b++;
+  return { start: a, end: b };
+}
+const itemTitle = it => mediaFor(it.name)?.title || exName(it.name);
+
 function toggleSet(i, j) {
-  const it = state.draft.items[i];
+  const items = state.draft.items;
+  const it = items[i];
   const s = it.sets[j];
   s.done = !s.done;
-  if (s.done && s.w && s.r && !it.plan.warmup && !it.plan.skill) {
-    // подстраиваем следующие невыполненные подходы, которые ты не правил руками
+  if (s.done && !s.drop && s.w && s.r && !it.plan.warmup && !it.plan.skill) {
+    // подстраиваем следующие обычные подходы, которые ты не правил руками (дропы не трогаем)
     const next = E.adjustedWeight(it.plan, { w: +s.w, r: +s.r, rir: +s.rir }, state.settings);
     for (const n of it.sets.slice(j + 1)) {
-      if (!n.done && !n.edited) n.w = next;
+      if (!n.done && !n.edited && !n.drop) n.w = next;
     }
   }
-  if (s.done) startTimer(it.plan.rest || 90, nextUpLabel(i, j));
+  if (s.done) {
+    const ch = chainOf(i);
+    const nextSet = it.sets[j + 1];
+    if (nextSet?.drop && !nextSet.done) {
+      // дроп-сет: без отдыха, только снять вес
+      stopTimer();
+      toast(L(`Сразу дроп: ${fmtW(+nextSet.w)} кг`, `Drop right away: ${fmtW(+nextSet.w)} kg`));
+    } else if (it.link && i < ch.end) {
+      // суперсет: сразу к следующему упражнению цепочки
+      stopTimer();
+      toast(L('Сразу: ', 'Next, no rest: ') + itemTitle(items[i + 1]));
+      requestAnimationFrame(() => view.querySelectorAll('.card.tight')[i + 2]?.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+    } else if (ch.end > ch.start) {
+      // конец круга: отдых, потом снова первое упражнение цепочки
+      const rest = Math.min(...items.slice(ch.start, ch.end + 1).map(x => x.plan.rest || 90));
+      const first = items.slice(ch.start, ch.end + 1).find(x => x.sets.some(z => !z.done));
+      startTimer(rest, first ? `${L('новый круг', 'next round')}: ${itemTitle(first)}` : nextUpLabel(i, j));
+    } else {
+      startTimer(it.plan.rest || 90, nextUpLabel(i, j));
+    }
+  }
   save(KEYS.draft, state.draft);
   renderSession();
 }
@@ -342,8 +384,9 @@ function finishSession() {
     .map(it => ({
       name: it.name,
       sets: it.sets.filter(s => s.done && s.w !== '' && s.r).map(s => ({
-        w: +s.w, r: +s.r, rir: +s.rir, ...(it.plan.warmup ? { flag: 'warmup' } : {}),
+        w: +s.w, r: +s.r, rir: +s.rir, ...(it.plan.warmup ? { flag: 'warmup' } : s.drop ? { flag: 'drop' } : {}),
       })),
+      ...(it.link ? { superset: true } : {}),
     }))
     .filter(ex => ex.sets.length);
   if (!exercises.length) {
@@ -495,6 +538,8 @@ document.addEventListener('visibilitychange', () => {
 
 // ---------- ИСТОРИЯ ----------
 
+const FLAG_LABEL = L({ warmup: 'разминка', drop: 'дроп', hard: 'тяжело' }, { warmup: 'warm-up', drop: 'drop', hard: 'hard' });
+
 function renderHistory() {
   const list = [...state.workouts].reverse();
   if (!list.length) {
@@ -518,8 +563,8 @@ function renderHistory() {
         </summary>
         <div class="body">
           ${w.exercises.map(e => `
-            <div class="ex-line"><div>${esc(exName(e.name))}</div>
-            <div class="sets-txt">${e.sets.map(s => s.raw ? esc(s.raw) : `${fmtW(s.w)}×${s.r}${s.flag ? ` <i>${esc(s.flag)}</i>` : ''}${s.rir != null ? ` <span title="${L('в запасе', 'reps in reserve')}">(${s.rir})</span>` : ''}`).join(' · ')}</div></div>`).join('')}
+            <div class="ex-line"><div>${esc(exName(e.name))}${e.superset ? ` <span class="muted small">⛓ ${L('суперсет со следующим', 'superset with next')}</span>` : ''}</div>
+            <div class="sets-txt">${e.sets.map(s => s.raw ? esc(s.raw) : `${fmtW(s.w)}×${s.r}${s.flag ? ` <i>${esc(FLAG_LABEL[s.flag] || s.flag)}</i>` : ''}${s.rir != null ? ` <span title="${L('в запасе', 'reps in reserve')}">(${s.rir})</span>` : ''}`).join(' · ')}</div></div>`).join('')}
           ${w.note ? `<div class="small muted">${esc(w.note)}</div>` : ''}
           <div class="row" style="margin-top:8px"><button class="small danger" data-act="del-workout" data-id="${esc(w.id)}">${L('Удалить тренировку', 'Delete workout')}</button></div>
         </div>
@@ -906,9 +951,33 @@ view.addEventListener('click', async e => {
       save(KEYS.draft, state.draft); renderSession(); break;
     }
     case 'del-set': state.draft.items[i].sets.pop(); save(KEYS.draft, state.draft); renderSession(); break;
+    case 'add-drop': {
+      // дроп: снял блин и продолжил без отдыха. Свой вес — минус 5 кг отягощения, остальное — примерно −25%.
+      const it = state.draft.items[i];
+      const base = it.sets[it.sets.length - 1];
+      const bw = state.settings.bodyweight;
+      const w0 = +base?.w || it.plan.weight || 0;
+      const w = it.plan.meta.equip === 'bodyweight' ? Math.max(bw, w0 - 5) : E.roundWeight(w0 * 0.75, it.plan.meta, state.settings);
+      it.sets.push({ w, r: Math.max(1, Math.round((+base?.r || it.plan.targetReps) * 0.6)), rir: 0, done: false, edited: true, drop: true });
+      save(KEYS.draft, state.draft); renderSession(); break;
+    }
+    case 'ses-link': {
+      const it = state.draft.items[i];
+      it.link = !it.link; save(KEYS.draft, state.draft); renderSession();
+      toast(it.link ? L('Связано в суперсет', 'Linked as a superset') : L('Суперсет разорван', 'Superset unlinked'));
+      break;
+    }
+    case 'tpl-link': {
+      const t = state.templates[day];
+      t.linked = t.linked || [];
+      t.linked[i] = !t.linked[i]; saveTemplates(); render();
+      break;
+    }
     case 'remove-ex':
       if (state.draft.items[i].sets.some(s => s.done) && !confirm(L('В упражнении есть выполненные подходы. Убрать?', 'This exercise has completed sets. Remove it?'))) return;
-      state.draft.items.splice(i, 1); save(KEYS.draft, state.draft); renderSession(); break;
+      state.draft.items.splice(i, 1);
+      if (state.draft.items.length) state.draft.items[state.draft.items.length - 1].link = false;
+      save(KEYS.draft, state.draft); renderSession(); break;
     case 'open-add':
       openExercisePicker(L('Добавить в тренировку', 'Add to workout'), name => {
         const p = { ...E.prescribe(name, state.draft.phaseKey, state.workouts, state.settings, today()), trend: E.trend(name, state.workouts, today()) };
@@ -956,14 +1025,19 @@ view.addEventListener('click', async e => {
       toast(L('Новый блок начат с этой недели', 'A new block starts this week')); break;
     // правка программы дня — и в настройках, и на экране «Сегодня» до старта тренировки
     case 'tpl-del': {
-      const [gone] = state.templates[day].exercises.splice(i, 1); saveTemplates(); render();
+      const [gone] = state.templates[day].exercises.splice(i, 1);
+      state.templates[day].linked?.splice(i, 1);
+      saveTemplates(); render();
       toast(L('Убрано: ', 'Removed: ') + (mediaFor(gone)?.title || exName(gone)));
       break;
     }
     case 'tpl-up': {
       if (i === 0) return;
       const ex = state.templates[day].exercises;
-      [ex[i - 1], ex[i]] = [ex[i], ex[i - 1]]; saveTemplates(); render(); break;
+      [ex[i - 1], ex[i]] = [ex[i], ex[i - 1]];
+      const ln = state.templates[day].linked;
+      if (ln) { ln[i - 1] = false; ln[i] = false; if (i > 1) ln[i - 2] = false; }
+      saveTemplates(); render(); break;
     }
     case 'tpl-add':
       openExercisePicker(`${L('Добавить в', 'Add to')} ${E.WEEKDAYS[day]} · ${dayTitle(state.templates[day].title)}`, name => {

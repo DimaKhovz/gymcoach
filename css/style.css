@@ -260,3 +260,8 @@ body.modal-open { overflow: hidden; }
 .switch input { width: 20px; height: 20px; margin: 1px 0 0; accent-color: var(--accent); flex: none; }
 
 .photo-btn { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 12px; border: 1px dashed var(--line); border-radius: 12px; cursor: pointer; text-align: center; }
+
+.card.linked { border-left: 3px solid var(--accent); }
+.link-btn { display: block; margin: -6px auto 6px; padding: 4px 12px; font-size: 13px; background: none; border: 1px dashed var(--line); border-radius: 999px; color: var(--muted, #8b93a1); }
+.link-btn.on { border-style: solid; border-color: var(--accent); color: var(--accent); }
+tr.drop td.n { color: var(--warn, #ff9f43); font-weight: 700; }
