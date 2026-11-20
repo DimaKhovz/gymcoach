@@ -265,3 +265,14 @@ body.modal-open { overflow: hidden; }
 .link-btn { display: block; margin: -6px auto 6px; padding: 4px 12px; font-size: 13px; background: none; border: 1px dashed var(--line); border-radius: 999px; color: var(--muted, #8b93a1); }
 .link-btn.on { border-style: solid; border-color: var(--accent); color: var(--accent); }
 tr.drop td.n { color: var(--warn, #ff9f43); font-weight: 700; }
+
+tr.drop td { background: rgba(255, 159, 67, .12); }
+tr.drop td.n { white-space: nowrap; font-size: 12px; }
+tr.drop td:first-child { border-left: 3px solid var(--warn); }
+.drop-tag { color: var(--warn); font-weight: 700; }
+tr.drop-add td { padding: 0 0 6px; }
+.drop-btn { width: 100%; padding: 6px 10px; font-size: 13px; background: none; color: var(--warn); border: 1px dashed var(--warn); border-radius: 10px; }
+.end-sheet { text-align: center; padding: 6px 4px 2px; }
+.end-sheet .end-icon { font-size: 34px; }
+.end-sheet.fin h3 { color: var(--accent); }
+.end-sheet.cancel h3 { color: var(--bad); }

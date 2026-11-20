@@ -301,14 +301,21 @@ function renderItem(it, i) {
   const p = it.plan;
   const isBw = p.meta.equip === 'bodyweight';
   const linked = it.link || state.draft.items[i - 1]?.link;
+  // кнопка «+ дроп» — под последним отмеченным подходом, если дропа после него ещё нет
+  const lastDone = it.sets.reduce((k, x, idx) => (x.done ? idx : k), -1);
+  const canDrop = !p.warmup && !p.skill && lastDone >= 0 && !it.sets[lastDone + 1]?.drop;
+  let num = 0;
   const rows = it.sets.map((s, j) => `
     <tr class="${s.done ? 'done' : ''} ${s.drop ? 'drop' : ''}">
-      <td class="n">${s.drop ? `<span title="${L('дроп-сет: сразу после предыдущего, без отдыха', 'drop set: right after the previous one, no rest')}">↓</span>` : j + 1}</td>
+      <td class="n">${s.drop ? `<span class="drop-tag" title="${L('дроп-сет: сразу после подхода, без отдыха', 'drop set: right after the set, no rest')}">↳ ${L('дроп', 'drop')}</span>` : ++num}</td>
       <td><input type="number" inputmode="decimal" step="any" value="${s.w ?? ''}" data-i="${i}" data-j="${j}" data-f="w" placeholder="${L('кг', 'kg')}"></td>
       <td><input type="number" inputmode="numeric" value="${s.r ?? ''}" data-i="${i}" data-j="${j}" data-f="r"></td>
       <td><select data-i="${i}" data-j="${j}" data-f="rir">${[0, 1, 2, 3, 4].map(v => `<option value="${v}" ${+s.rir === v ? 'selected' : ''}>${v === 4 ? '4+' : v}</option>`).join('')}</select></td>
       <td class="ok"><button class="check" data-act="toggle-set" data-i="${i}" data-j="${j}" aria-label="${L('Подход выполнен', 'Set done')}">✓</button></td>
-    </tr>`).join('');
+    </tr>${canDrop && j === lastDone ? `
+    <tr class="drop-add"><td colspan="5"><button class="drop-btn" data-act="add-drop" data-i="${i}" data-j="${j}">＋ ${s.drop
+      ? L('ещё дроп: ещё легче, без отдыха', 'another drop: even lighter, no rest')
+      : L('дроп: сразу взял вес полегче, без отдыха', 'drop: lighter weight right away, no rest')}</button></td></tr>` : ''}`).join('');
   return `
     <div class="card tight ${linked ? 'linked' : ''}">
       <div class="ex-head">
@@ -325,7 +332,6 @@ function renderItem(it, i) {
       </table>
       <div class="row" style="margin-top:6px">
         <button class="small" data-act="add-set" data-i="${i}">+ ${L('подход', 'set')}</button>
-        ${p.warmup || p.skill ? '' : `<button class="small" data-act="add-drop" data-i="${i}" title="${L('Снял вес и сразу продолжил', 'Lighter weight right away, no rest')}">+ ${L('дроп', 'drop')}</button>`}
         ${it.sets.length > 1 ? `<button class="small ghost" data-act="del-set" data-i="${i}">− ${L('подход', 'set')}</button>` : ''}
       </div>
     </div>`;
@@ -378,6 +384,24 @@ function toggleSet(i, j) {
   renderSession();
 }
 
+// Защита от случайного нажатия: «Завершить» и «Отменить» сначала спрашивают.
+function askEnd(kind) {
+  const items = state.draft.items;
+  const done = items.reduce((n, it) => n + it.sets.filter(x => x.done).length, 0);
+  const left = items.reduce((n, it) => n + it.sets.filter(x => !x.done).length, 0);
+  const fin = kind === 'finish';
+  showModal(`
+    <div class="end-sheet ${fin ? 'fin' : 'cancel'}">
+      <div class="end-icon">${fin ? '🏁' : '⚠️'}</div>
+      <h3 style="margin:6px 0 4px">${fin ? L('Завершить тренировку?', 'Finish the workout?') : L('Отменить тренировку?', 'Cancel the workout?')}</h3>
+      <p class="small muted" style="margin:0 0 14px">${fin
+        ? L(`Отмечено подходов: ${done}.${left ? ` Не отмечено: ${left}, они не сохранятся.` : ''}`, `Sets done: ${done}.${left ? ` Not checked: ${left}, they won't be saved.` : ''}`)
+        : L(`Все отмеченные подходы (${done}) пропадут.`, `All checked sets (${done}) will be lost.`)}</p>
+      <button class="block ${fin ? 'primary' : 'danger'}" data-m="${fin ? 'end-finish' : 'end-cancel'}">${fin ? L('Да, завершить и сохранить', 'Yes, finish and save') : L('Да, отменить', 'Yes, cancel it')}</button>
+      <button class="block" data-m="close" style="margin-top:8px">${L('Нет, продолжить тренировку', 'No, keep training')}</button>
+    </div>`);
+}
+
 function finishSession() {
   const d = state.draft;
   const exercises = d.items
@@ -389,9 +413,7 @@ function finishSession() {
       ...(it.link ? { superset: true } : {}),
     }))
     .filter(ex => ex.sets.length);
-  if (!exercises.length) {
-    if (!confirm(L('Нет отмеченных подходов. Выйти без сохранения?', 'No sets checked. Exit without saving?'))) return;
-  } else {
+  if (exercises.length) {
     state.workouts.push({
       id: 'app-' + d.startedAt,
       date: d.date,
@@ -952,14 +974,18 @@ view.addEventListener('click', async e => {
     }
     case 'del-set': state.draft.items[i].sets.pop(); save(KEYS.draft, state.draft); renderSession(); break;
     case 'add-drop': {
-      // дроп: снял блин и продолжил без отдыха. Свой вес — минус 5 кг отягощения, остальное — примерно −25%.
+      // дроп: сразу после подхода взял вес полегче (гантели 10 → 8, пояс −5 кг) и продолжил без отдыха.
       const it = state.draft.items[i];
-      const base = it.sets[it.sets.length - 1];
+      const j = +b.dataset.j;
+      const base = it.sets[j];
       const bw = state.settings.bodyweight;
       const w0 = +base?.w || it.plan.weight || 0;
-      const w = it.plan.meta.equip === 'bodyweight' ? Math.max(bw, w0 - 5) : E.roundWeight(w0 * 0.75, it.plan.meta, state.settings);
-      it.sets.push({ w, r: Math.max(1, Math.round((+base?.r || it.plan.targetReps) * 0.6)), rir: 0, done: false, edited: true, drop: true });
-      save(KEYS.draft, state.draft); renderSession(); break;
+      const w = it.plan.meta.equip === 'bodyweight' ? Math.max(bw, w0 - 5) : Math.min(w0 - it.plan.meta.step, E.roundWeight(w0 * 0.8, it.plan.meta, state.settings));
+      it.sets.splice(j + 1, 0, { w: Math.max(0, w), r: Math.max(1, Math.round((+base?.r || it.plan.targetReps) * 0.7)), rir: 0, done: false, edited: true, drop: true });
+      stopTimer(); // дроп делается без отдыха
+      save(KEYS.draft, state.draft); renderSession();
+      toast(L('Дроп добавлен: поправь вес и повторы, потом ✓', 'Drop added: adjust weight and reps, then ✓'));
+      break;
     }
     case 'ses-link': {
       const it = state.draft.items[i];
@@ -988,12 +1014,8 @@ view.addEventListener('click', async e => {
         requestAnimationFrame(() => view.querySelectorAll('.card.tight')[state.draft.items.length]?.scrollIntoView({ block: 'center', behavior: 'smooth' }));
       });
       break;
-    case 'cancel':
-      if (confirm(L('Отменить тренировку? Отмеченные подходы не сохранятся.', 'Cancel the workout? Checked sets won\'t be saved.'))) {
-        state.draft = null; save(KEYS.draft, null); stopTimer(); releaseWakeLock(); render();
-      }
-      break;
-    case 'finish': finishSession(); break;
+    case 'cancel': askEnd('cancel'); break;
+    case 'finish': askEnd('finish'); break;
     case 'more-history': state.historyLimit += 30; renderHistory(); break;
     case 'del-workout':
       if (confirm(L('Удалить эту тренировку из истории?', 'Delete this workout from history?'))) {
@@ -1367,6 +1389,11 @@ modal.addEventListener('click', e => {
   if (!b) return;
   const a = b.dataset.m;
   if (a === 'close') closeModal();
+  if (a === 'end-finish') { closeModal(); finishSession(); }
+  if (a === 'end-cancel') {
+    closeModal();
+    state.draft = null; save(KEYS.draft, null); stopTimer(); releaseWakeLock(); render();
+  }
   if (a === 'flt') {
     addPicker.muscle = b.dataset.mu;
     modal.querySelectorAll('#pkChips .chip').forEach(c => c.classList.toggle('on', c === b));
